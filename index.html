@@ -2065,14 +2065,17 @@ function renderStudents() {
       ? getSubjectBadge(s.subject, 'background:rgba(255,255,255,0.05);color:var(--accent);border:1px solid rgba(0,212,255,0.3);')
       : '<span style="color:var(--text3);font-size:12px;">—</span>';
     const payBadge = s.needPayment ? `<span class="badge badge-결제필요">결제 필요</span>` : '';
+    const phoneLink = s.phone
+      ? `<a href="tel:${s.phone}" style="color:var(--accent);text-decoration:none;font-weight:600;">${s.phone}</a>`
+      : '—';
     return `<tr>
       <td style="white-space:nowrap;min-width:60px;"><b style="cursor:pointer;color:var(--accent);text-decoration:underline;text-underline-offset:3px;" onclick='openStudentInfoModal(${JSON.stringify(s)})' title="클릭하여 상세정보 보기">${s.name}</b></td>
       <td>${subjectBadgeHtml}</td>
-      <td>${s.phone || '—'}</td>
-      <td>${statusBadge}</td>
-      <td>${s.teacher || '—'}</td>
+      <td style="white-space:nowrap;">${phoneLink}</td>
       <td>${progressBar}</td>
-      <td>${s.paymentDate || '—'}</td>
+      <td style="white-space:nowrap;">${s.paymentDate || '—'}</td>
+      <td>${statusBadge}</td>
+      <td style="white-space:nowrap;">${s.teacher || '—'}</td>
       <td>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn btn-secondary btn-xs" onclick='openEditStudentModal(${JSON.stringify(s)})'>수정</button>
@@ -2100,7 +2103,7 @@ function renderStudents() {
   document.getElementById('students-table-wrap').innerHTML = `
     <div class="table-wrap" style="margin-bottom:12px;">
       <table>
-        <thead><tr><th>이름</th><th>수강과목</th><th>연락처</th><th>상태</th><th>담당 선생님</th><th>수강 진행</th><th>결제일</th><th>관리</th></tr></thead>
+        <thead><tr><th>이름</th><th>수강과목</th><th>연락처</th><th>수강 진행</th><th>결제일</th><th>상태</th><th>담당 선생님</th><th>관리</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -2144,8 +2147,8 @@ function openStudentInfoModal(s) {
     </div>` : ''}
 
     <div style="padding:0 2px;">
-      ${row('📞','연락처', s.phone)}
-      ${row('👨‍👩‍👧','학부모', s.parentPhone)}
+      ${row('📞','연락처', s.phone ? `<a href='tel:${s.phone}' style='color:var(--accent);font-weight:600;'>${s.phone}</a>` : '—')}
+      ${row('👨‍👩‍👧','학부모', s.parentPhone ? `<a href='tel:${s.parentPhone}' style='color:var(--accent);font-weight:600;'>${s.parentPhone}</a>` : '—')}
       ${row('👩‍🏫','담당 선생님', s.teacher)}
       ${row('🎵','수강 과목', s.subject ? (SUBJ_ICONS[s.subject]||'🎵')+' '+s.subject : '')}
       ${row('💰','결제 유형', typeLabel[s.studentType] || s.studentType)}
@@ -2870,8 +2873,8 @@ function renderStats() {
           ${needPay.map(s => `<tr>
             <td style="white-space:nowrap;"><b>${s.name}</b></td>
             <td>${s.subject ? getSubjectBadge(s.subject) : '—'}</td>
-            <td>${s.phone||'—'}</td>
-            <td>${s.parentPhone||'—'}</td>
+            <td>${s.phone ? `<a href='tel:${s.phone}' style='color:var(--accent);'>${s.phone}</a>` : '—'}</td>
+            <td>${s.parentPhone ? `<a href='tel:${s.parentPhone}' style='color:var(--accent);'>${s.parentPhone}</a>` : '—'}</td>
             <td style="color:var(--text2)">${s.paymentDate||'—'}</td>
             <td style="color:var(--danger);font-weight:700">${s.usedSessions}/${s.totalSessions}</td>
           </tr>`).join('')}
@@ -3404,7 +3407,7 @@ function renderMyStudents() {
       <div style="font-size:36px;flex-shrink:0;line-height:1;">${SUBJ_ICONS[s.subject] || '🎓'}</div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:1.1rem;font-weight:800;margin-bottom:5px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;">${s.name} ${payBadge}</div>
-        <div style="font-size:0.88rem;color:var(--text2);margin-bottom:6px;">${subj} &nbsp;${s.phone||'연락처 없음'}</div>
+        <div style="font-size:0.88rem;color:var(--text2);margin-bottom:6px;">${subj} &nbsp;${s.phone ? `<a href='tel:${s.phone}' style='color:var(--accent);font-weight:600;'>${s.phone}</a>` : '연락처 없음'}</div>
         ${progressBar}
       </div>
       <div style="color:var(--text3);font-size:24px;flex-shrink:0;font-weight:300;">›</div>
