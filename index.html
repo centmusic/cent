@@ -412,7 +412,7 @@ select.form-control option { background: var(--card); }
 table { width: 100%; border-collapse: collapse; }
 thead tr { background: var(--surface); }
 th {
-  padding: 12px 14px;
+  padding: 8px 10px;
   text-align: left;
   font-size: 11px; font-weight: 700;
   color: var(--text2); letter-spacing: 0.06em; text-transform: uppercase;
@@ -420,9 +420,10 @@ th {
   border-bottom: 1px solid var(--border2);
 }
 td {
-  padding: 12px 14px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   vertical-align: middle; font-size: 13px;
+  white-space: nowrap;
 }
 tbody tr { background: var(--card); transition: background 0.15s; }
 tbody tr:hover { background: var(--card2); }
@@ -809,11 +810,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 #screen-teacher.active { display: flex !important; }
 
-/* ── 상단 바 ── */
+/* ── 상단 바 — 노치(Dynamic Island) 아래로 밀기 ── */
 #screen-teacher > .topbar {
-  height: 64px !important;
+  height: calc(64px + env(safe-area-inset-top, 0px)) !important;
   flex-shrink: 0 !important;
   padding: 0 20px !important;
+  padding-top: env(safe-area-inset-top, 0px) !important;
   background: rgba(9,15,38,0.97) !important;
   border-bottom: 1px solid var(--border2) !important;
 }
@@ -828,7 +830,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch !important;
   /* 하단 탭바 높이만큼 여백 — 탭바가 덮지 않도록 */
-  padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+  padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px)) !important;
 }
 
 /* ── 하단 탭 바 ── */
@@ -838,7 +840,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   left: 0 !important; right: 0 !important;
   display: flex !important;
   flex-direction: row !important;
-  height: 76px !important;
+  height: 62px !important;
   flex-shrink: 0 !important;
   background: rgba(9,15,38,0.98) !important;
   border-top: 1.5px solid var(--border2) !important;
@@ -874,7 +876,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   letter-spacing: 0 !important;
 }
 #screen-teacher .tabs-wrap .tab-btn .tab-icon {
-  font-size: 1.65rem !important;
+  font-size: 1.3rem !important;
   line-height: 1 !important;
   display: block !important;
   transition: transform 0.15s !important;
@@ -933,45 +935,42 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 #screen-teacher .today-class-card {
   background: var(--card) !important;
   border: 1.5px solid var(--border2) !important;
-  border-radius: 18px !important;
-  padding: 0 !important;       /* 내부 구조로 처리 */
-  margin-bottom: 14px !important;
+  border-radius: 14px !important;
+  padding: 0 !important;
+  margin-bottom: 8px !important;
   display: flex !important;
   flex-direction: column !important;
   gap: 0 !important;
   overflow: hidden !important;
 }
 
-/* 카드 상단: 이모지 + 이름/시간 + 진행바 */
+/* 카드 상단: 이름/시간 + 진행바 */
 #screen-teacher .today-class-card-top {
   display: flex !important;
-  align-items: flex-start !important;
-  gap: 14px !important;
-  padding: 18px 18px 14px !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 10px 14px 8px !important;
 }
 #screen-teacher .t-card-emoji {
-  font-size: 38px !important;
-  line-height: 1 !important;
-  flex-shrink: 0 !important;
-  margin-top: 2px !important;
+  display: none !important;  /* 음표 이모지 숨김 */
 }
 #screen-teacher .t-card-info {
   flex: 1 !important;
   min-width: 0 !important;
 }
 #screen-teacher .today-class-name {
-  font-size: 1.2rem !important;
-  font-weight: 800 !important;
-  margin-bottom: 3px !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  margin-bottom: 2px !important;
   display: flex !important;
   align-items: center !important;
-  gap: 8px !important;
+  gap: 6px !important;
   flex-wrap: wrap !important;
 }
 #screen-teacher .today-class-meta {
-  font-size: 0.9rem !important;
+  font-size: 0.82rem !important;
   color: var(--text2) !important;
-  margin-bottom: 10px !important;
+  margin-bottom: 5px !important;
 }
 
 /* 진행 게이지 — 크고 잘 보이게 */
@@ -983,9 +982,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 #screen-teacher .progress-bar {
   flex: 1 !important;
-  height: 10px !important;        /* 두껍게 */
+  height: 7px !important;
   background: var(--border2) !important;
-  border-radius: 5px !important;
+  border-radius: 4px !important;
   overflow: hidden !important;
   min-width: 0 !important;
 }
@@ -1019,9 +1018,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   text-align: center !important;
   font-size: 0.88rem !important;
   font-weight: 700 !important;
-  min-height: 3.4rem !important;
+  min-height: 2.6rem !important;
   border-radius: 0 !important;
-  padding: 12px 6px !important;
+  padding: 8px 6px !important;
   border: none !important;
   border-right: 1px solid var(--border) !important;
   background: transparent !important;
@@ -1088,28 +1087,38 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 /* 선생님 시간표: 13~22시 가로스크롤, 셀 높이 고정 */
 #screen-teacher .timetable-wrap {
   border: 1px solid var(--border) !important;
-  border-radius: 12px !important;
+  border-radius: 10px !important;
   overflow: auto !important;
   -webkit-overflow-scrolling: touch !important;
-  max-height: calc(100dvh - 220px) !important;
-  max-height: calc(100vh - 220px) !important;
+  /* 가로 스크롤 허용, 세로는 콘텐츠 높이 */
+  width: 100% !important;
 }
-#screen-teacher .timetable-grid { min-width: 560px !important; }
+/* 가로 너비를 화면에 맞게 — vw 기반으로 축소 */
+#screen-teacher .timetable-grid {
+  min-width: unset !important;
+  width: 100% !important;
+}
 #screen-teacher .timetable-header-row,
 #screen-teacher .timetable-row {
-  grid-template-columns: 46px repeat(7, 1fr) !important;
+  grid-template-columns: 38px repeat(6, 1fr) !important;
 }
-#screen-teacher .timetable-header-cell,
+#screen-teacher .timetable-header-cell {
+  font-size: 11px !important;
+  padding: 6px 1px !important;
+  text-align: center !important;
+}
 #screen-teacher .timetable-time {
-  font-size: 12px !important;
-  padding: 6px 2px !important;
+  font-size: 9px !important;
+  padding: 0 2px !important;
+  justify-content: center !important;
 }
 #screen-teacher .timetable-cell {
-  min-height: 38px !important;
-  height: 38px !important;
+  min-height: 28px !important;
+  height: 28px !important;
 }
 #screen-teacher .timetable-slot-content {
-  font-size: 11px !important;
+  font-size: 9px !important;
+  padding: 1px 2px !important;
 }
 
 /* ╔════════════════════════════════════╗
@@ -2057,7 +2066,7 @@ function renderStudents() {
       : '<span style="color:var(--text3);font-size:12px;">—</span>';
     const payBadge = s.needPayment ? `<span class="badge badge-결제필요">결제 필요</span>` : '';
     return `<tr>
-      <td><b style="cursor:pointer;color:var(--accent);text-decoration:underline;text-underline-offset:3px;" onclick='openStudentInfoModal(${JSON.stringify(s)})' title="클릭하여 상세정보 보기">${s.name}</b></td>
+      <td style="white-space:nowrap;min-width:60px;"><b style="cursor:pointer;color:var(--accent);text-decoration:underline;text-underline-offset:3px;" onclick='openStudentInfoModal(${JSON.stringify(s)})' title="클릭하여 상세정보 보기">${s.name}</b></td>
       <td>${subjectBadgeHtml}</td>
       <td>${s.phone || '—'}</td>
       <td>${statusBadge}</td>
@@ -2859,7 +2868,7 @@ function renderStats() {
         <thead><tr><th>이름</th><th>과목</th><th>연락처</th><th>학부모</th><th>최근 결제일</th><th>수강 현황</th></tr></thead>
         <tbody>
           ${needPay.map(s => `<tr>
-            <td><b>${s.name}</b></td>
+            <td style="white-space:nowrap;"><b>${s.name}</b></td>
             <td>${s.subject ? getSubjectBadge(s.subject) : '—'}</td>
             <td>${s.phone||'—'}</td>
             <td>${s.parentPhone||'—'}</td>
@@ -3066,7 +3075,7 @@ function renderPayments() {
     const tp     = s.studentType || '';
     const tBadge = tp
       ? `<span style="background:rgba(255,255,255,0.05);border:1px solid ${typeColor[tp]||'var(--text3)'};
-          border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;
+          border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap;
           color:${typeColor[tp]||'var(--text2)'};">${typeIcon[tp]||''} ${tp}</span>`
       : '—';
     return `<tr>
