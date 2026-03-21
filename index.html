@@ -1440,6 +1440,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   <div class="tab-panel" id="panel-sms">
     <div class="page-content">
 
+      <!-- 섹션: 결제 필요 학생 (수강권 소진) -->
+      <div id="sms-needpay-section" style="margin-bottom:20px;"></div>
+
       <!-- 섹션: 7일 초과 미결제 -->
       <div id="sms-overdue-section" style="margin-bottom:24px;"></div>
 
@@ -3522,6 +3525,9 @@ function _buildSMSTab() {
     });
   }
 
+  // 결제필요 학생 리스트 렌더링
+  _renderNeedPayList(enrolled);
+
   // 학생 리스트 렌더링
   _smsAllEnrolled = enrolled;
   _smsSelected.clear();          // 탭 새로 열 때 선택 초기화
@@ -3831,6 +3837,102 @@ function deleteSelectedTemplate() {
     }).catch(onError);
 }
 
+
+// ── 결제필요 학생 리스트 (수강권 소진)
+function _renderNeedPayList(enrolled) {
+  const wrap = document.getElementById('sms-needpay-section');
+  if (!wrap) return;
+
+  const needPay = enrolled.filter(s => s.needPayment);
+  if (needPay.length === 0) {
+    wrap.innerHTML = '';
+    return;
+  }
+
+  // 미성년 여부 판단
+  function isMinor(s) { return (parseInt(s.age) || 0) < 20; }
+  function hasParent(s) { return !!s.parentPhone; }
+
+  wrap.innerHTML = `
+    <div style="background:var(--card);border:2px solid var(--danger);border-radius:14px;padding:18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-size:15px;font-weight:800;color:var(--danger);">🚨 수강권 소진 — 결제 필요 (${needPay.length}명)</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:3px;">전체선택 시 미성년자는 학부모 번호로 자동 선택됩니다</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-danger btn-sm" onclick="selectAllNeedPay()">📋 전체선택</button>
+          <button class="btn btn-secondary btn-sm" onclick="deselectAllNeedPay()">해제</button>
+        </div>
+      </div>
+      <div id="sms-needpay-list" style="display:flex;flex-direction:column;gap:6px;">
+        ${needPay.map(s => {
+          const minor = isMinor(s);
+          const parent = hasParent(s);
+          const defaultTarget = (minor && parent) ? 'parent' : 'student';
+          const targetPhone = defaultTarget === 'parent' ? s.parentPhone : s.phone;
+          return `
+          <div class="sms-needpay-row" style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface);border-radius:10px;flex-wrap:wrap;">
+            <input type="checkbox" class="sms-chk sms-needpay-chk"
+              data-name="${s.name}" data-phone="${s.phone}"
+              data-parent="${s.parentPhone||''}" data-age="${s.age||0}"
+              onchange="onSmsChkChange(this)">
+            <div style="flex:1;min-width:120px;">
+              <div style="font-size:14px;font-weight:700;">${s.name}
+                ${minor ? '<span style="font-size:11px;color:var(--purple);font-weight:600;margin-left:4px;">미성년</span>' : ''}
+              </div>
+              <div style="font-size:12px;color:var(--text2);">
+                ${SUBJ_ICONS[s.subject]||''} ${s.subject||''} · ${s.teacher||''}
+              </div>
+            </div>
+            ${minor && parent ? `
+            <div style="display:flex;gap:8px;font-size:12px;flex-wrap:wrap;">
+              <label style="display:flex;align-items:center;gap:3px;cursor:pointer;">
+                <input type="radio" name="np-target-${s.name}" value="student"
+                  ${defaultTarget==='student'?'checked':''}
+                  class="sms-target" data-name="${s.name}"
+                  onchange="onSmsTargetChange(this)"> 학생(${s.phone||'없음'})
+              </label>
+              <label style="display:flex;align-items:center;gap:3px;cursor:pointer;">
+                <input type="radio" name="np-target-${s.name}" value="parent"
+                  ${defaultTarget==='parent'?'checked':''}
+                  class="sms-target" data-name="${s.name}"
+                  onchange="onSmsTargetChange(this)"> 학부모(${s.parentPhone})
+              </label>
+            </div>` : `
+            <div style="font-size:12px;color:var(--text2);">
+              📱 ${targetPhone||'번호없음'}
+            </div>`}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+// 결제필요 전체선택
+function selectAllNeedPay() {
+  const chks = document.querySelectorAll('.sms-needpay-chk');
+  chks.forEach(el => {
+    el.checked = true;
+    onSmsChkChange(el);
+    // 미성년자는 학부모 번호 자동 선택
+    const age = parseInt(el.dataset.age) || 0;
+    const parent = el.dataset.parent;
+    if (age < 20 && parent) {
+      const radio = document.querySelector(`input[name="np-target-${el.dataset.name}"][value="parent"]`);
+      if (radio) { radio.checked = true; onSmsTargetChange(radio); }
+    }
+  });
+}
+
+// 결제필요 전체해제
+function deselectAllNeedPay() {
+  const chks = document.querySelectorAll('.sms-needpay-chk');
+  chks.forEach(el => {
+    el.checked = false;
+    onSmsChkChange(el);
+  });
+}
 // ============================================================
 // LOADING
 // ============================================================
