@@ -1372,6 +1372,26 @@ input[type="date"]::-webkit-calendar-picker-indicator {
       <div id="teachers-table-wrap">
         <div class="empty-state"><div class="empty-state-icon">👩‍🏫</div><div class="empty-state-text">선생님 데이터를 불러오는 중...</div></div>
       </div>
+
+      <!-- 공지사항 작성 (관리자 전용) -->
+      <div style="margin-top:28px;">
+        <div style="font-size:16px;font-weight:800;margin-bottom:14px;">📢 선생님 공지사항</div>
+        <div style="background:var(--card);border:1px solid var(--border2);border-radius:14px;padding:20px;">
+          <div style="font-size:13px;color:var(--text2);margin-bottom:12px;">
+            선생님들이 자신의 페이지에 입장하면 팝업으로 표시됩니다. 하루 1회 노출.
+          </div>
+          <div class="form-group">
+            <label class="form-label">공지 내용</label>
+            <textarea id="admin-notice-input" rows="4" class="form-control"
+              placeholder="선생님들에게 전달할 공지사항을 입력하세요..."
+              style="resize:vertical;min-height:100px;"></textarea>
+          </div>
+          <button class="btn btn-primary" onclick="postAdminNotice()" style="width:100%;">
+            📢 공지 등록
+          </button>
+          <div id="admin-notice-list" style="margin-top:16px;"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1653,7 +1673,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
         <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
           <select id="memo-target" class="form-control" style="flex:1;border-radius:12px;">
             <option value="공통">📢 전체 공유</option>
-            <option value="전체공지">🔔 전체 공지 (선생님 팝업)</option>
           </select>
           <button class="btn btn-primary" onclick="submitMemo()" style="flex-shrink:0;border-radius:12px;padding:12px 20px;font-size:15px;min-height:50px;">등록</button>
         </div>
@@ -1900,7 +1919,7 @@ function onDataLoaded(data) {
     showScreen('home');
   } else if (state.currentScreen === 'admin') {
     if (state.adminTab === 'students') renderStudents();
-    else if (state.adminTab === 'teachers') renderTeachers();
+    else if (state.adminTab === 'teachers') { renderTeachers(); renderAdminNotices(); }
     else if (state.adminTab === 'timetable') renderTimetable();
     else if (state.adminTab === 'stats') renderStats();
     else if (state.adminTab === 'salary') renderSalary();
@@ -1949,7 +1968,7 @@ function goTeacher() {
   // 메모 대상 select에 선생님 목록 채우기
   const memoTarget = document.getElementById('memo-target');
   if (memoTarget) {
-    memoTarget.innerHTML = '<option value="공통">📢 전체 공유</option><option value="전체공지">🔔 전체 공지 (팝업)</option>';
+    memoTarget.innerHTML = '<option value="공통">📢 전체 공유</option>';
     state.data.teachers.forEach(t => {
       const o = document.createElement('option');
       o.value = t.name; o.textContent = '👩‍🏫 ' + t.name;
@@ -1975,7 +1994,7 @@ function showAdminTab(tab) {
   document.querySelectorAll('#screen-admin .tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + tab).classList.add('active');
   if (tab === 'students') renderStudents();
-  else if (tab === 'teachers') renderTeachers();
+  else if (tab === 'teachers') { renderTeachers(); renderAdminNotices(); }
   else if (tab === 'timetable') renderTimetable();
   else if (tab === 'stats') renderStats();
   else if (tab === 'salary') renderSalary();
@@ -2451,6 +2470,17 @@ function openPaymentModal(studentName) {
   document.getElementById('pay-amount').addEventListener('change', function() {
     document.getElementById('pay-amount-custom-wrap').style.display = this.value === '' ? 'flex' : 'none';
   });
+  // 결제 메모 + 결제수단 필드 추가
+  document.getElementById('modal-body').innerHTML +=
+    `<div class="form-group"><label class="form-label">결제 수단 / 메모</label>
+      <select class="form-control" id="pay-memo">
+        <option value="">선택 안 함</option>
+        <option value="계좌이체">💳 계좌이체</option>
+        <option value="현금">💵 현금</option>
+        <option value="현금영수증">🧾 현금영수증</option>
+        <option value="카드">💳 카드</option>
+        <option value="카카오페이">📱 카카오페이</option>
+      </select></div>`;
   document.getElementById('modal-footer').innerHTML = `
     <button class="btn btn-secondary" onclick="closeModal()">취소</button>
     <button class="btn btn-success" onclick="processPayment('${studentName}')">✅ 결제 완료</button>`;
@@ -2469,7 +2499,8 @@ function processPayment(studentName) {
     studentName,
     packageType: document.getElementById('pay-package').value,
     totalSessions: document.getElementById('pay-total').value,
-    paymentAmount
+    paymentAmount,
+    paymentMemo: document.getElementById('pay-memo')?.value || ''
   };
   closeModal(); showLoading(true);
   callAPI('addPayment', d)
@@ -3156,21 +3187,25 @@ function renderPayments() {
           border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap;
           color:${typeColor[tp]||'var(--text2)'};">${typeIcon[tp]||''} ${tp}</span>`
       : '—';
+    const memoTag = s.paymentMemo
+      ? `<span style="font-size:11px;background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:2px 7px;color:var(--text2);margin-left:4px;white-space:nowrap;">${s.paymentMemo}</span>`
+      : '';
     return `<tr>
-      <td><b>${s.name}</b></td>
+      <td style="white-space:nowrap;"><b>${s.name}</b></td>
       <td>${tBadge}</td>
-      <td>${s.teacher||'—'}</td>
-      <td>${s.packageType||'—'}</td>
+      <td style="white-space:nowrap;">${s.teacher||'—'}</td>
+      <td style="white-space:nowrap;">${s.packageType||'—'}</td>
       <td style="color:var(--primary);font-weight:700;">${s.totalSessions}회</td>
-      <td style="color:var(--success);font-weight:700;">${fmtAmt}</td>
-      <td style="color:var(--text2);">${s.paymentDate||'—'}</td>
+      <td style="color:var(--success);font-weight:700;white-space:nowrap;">${fmtAmt}${memoTag}</td>
+      <td style="color:var(--text2);white-space:nowrap;">${s.paymentDate||'—'}</td>
+      <td><button class="btn btn-danger btn-xs" onclick='openCancelPaymentModal("${s.name}",${s.rowIndex})'>취소</button></td>
     </tr>`;
   }).join('');
 
   html += `<div class="table-wrap"><table>
     <thead><tr>
       <th>학생명</th><th>유형</th><th>담당 선생님</th><th>수강권</th>
-      <th>횟수</th><th>결제금액</th><th>결제일</th>
+      <th>횟수</th><th>결제금액/수단</th><th>결제일</th><th>취소</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
@@ -3417,6 +3452,15 @@ function _renderTimetableFor(teacherName, containerId, editable) {
     headerCells += `<div class="timetable-header-cell ${isToday?'today-col':''}">${d}${isToday?'<br><span style="font-size:9px;color:var(--accent)">TODAY</span>':''}</div>`;
   });
 
+  // 슬롯별 "첫 번째 표시 셀" 미리 계산 (커스텀 시간 대응)
+  // 각 슬롯에 대해 TIMES 중 startTime 이상인 첫 번째 셀을 firstCell로 지정
+  const slotFirstCell = {}; // key: day_slotIdx
+  slots.forEach((slot, idx) => {
+    const startMin = timeToMin_(slot.startTime);
+    const firstTime = TIMES.find(t => timeToMin_(t) >= startMin);
+    if (firstTime) slotFirstCell[`${slot.dayOfWeek}_${idx}`] = firstTime;
+  });
+
   let rows = '';
   TIMES.forEach(time => {
     const halfHour = time.endsWith(':30');
@@ -3424,14 +3468,21 @@ function _renderTimetableFor(teacherName, containerId, editable) {
     DAYS.forEach(day => {
       const isToday = day === todayKr;
       const covering = getCovering(day, time);
-      const isStart  = covering.some(s => s.startTime === time);
 
       if (covering.length > 0) {
-        const names = covering.map(s => s.linkedStudent||'수업').join('<br>');
+        // 이 셀에서 이름을 표시할 슬롯: 이 셀이 해당 슬롯의 firstCell인 것
+        const displaySlots = covering.filter((s, idx) => {
+          const globalIdx = slots.indexOf(s);
+          return slotFirstCell[`${day}_${globalIdx}`] === time;
+        });
+        const names = displaySlots.length > 0
+          ? displaySlots.map(s => s.linkedStudent||'수업').join('<br>')
+          : covering.map(s => s.linkedStudent||'수업').join('<br>'); // fallback
+        const showText = displaySlots.length > 0;
         const clickAttr = editable
           ? `onclick='openTimetableSlotModal("${teacherName}","${day}","${time}",${JSON.stringify(covering[0])})'`
           : 'style="cursor:default"';
-        const textStyle = isStart ? '' : 'opacity:0;pointer-events:none;';
+        const textStyle = showText ? '' : 'opacity:0;pointer-events:none;';
         cells += `<div class="timetable-cell has-class ${isToday?'today-col':''}" ${clickAttr}>
           <div class="timetable-slot-content" style="${textStyle}font-size:11px;line-height:1.3;">${names}</div>
         </div>`;
@@ -4067,6 +4118,96 @@ function closeNotice() {
   document.getElementById('notice-overlay').style.display = 'none';
 }
 
+
+// ── 관리자 공지 등록
+function postAdminNotice() {
+  const text = (document.getElementById('admin-notice-input')?.value || '').trim();
+  if (!text) { showToast('공지 내용을 입력하세요', 'warning'); return; }
+  if (!confirm('공지를 등록할까요? 모든 선생님이 다음 입장 시 팝업으로 확인합니다.')) return;
+  const d = { teacherTarget: '전체공지', author: '관리자', content: text };
+  showLoading(true);
+  callAPI('addMemo', d)
+    .then(r => {
+      showLoading(false);
+      if (r.success) {
+        showToast('공지가 등록되었습니다', 'success');
+        document.getElementById('admin-notice-input').value = '';
+        loadData();
+      } else showToast(r.error, 'error');
+    }).catch(onError);
+}
+
+// ── 관리자 공지 목록 렌더링 (선생님관리 탭)
+function renderAdminNotices() {
+  const wrap = document.getElementById('admin-notice-list');
+  if (!wrap) return;
+  const notices = (state.data.memos || [])
+    .filter(m => m.teacherTarget === '전체공지')
+    .sort((a, b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+  if (notices.length === 0) {
+    wrap.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:12px;">등록된 공지가 없습니다</div>';
+    return;
+  }
+  wrap.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px;">등록된 공지 (${notices.length}건)</div>` +
+    notices.slice(0, 5).map(m => `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start;">
+      <div style="flex:1;">
+        <div style="font-size:14px;color:var(--text);white-space:pre-wrap;margin-bottom:4px;">${m.content}</div>
+        <div style="font-size:12px;color:var(--text3);">${m.createdAt||''}</div>
+      </div>
+      <button onclick="deleteAdminNotice(${m.rowIndex})"
+        style="background:none;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;flex-shrink:0;">삭제</button>
+    </div>`).join('');
+}
+
+function deleteAdminNotice(rowIndex) {
+  if (!confirm('이 공지를 삭제할까요?')) return;
+  showLoading(true);
+  callAPI('deleteMemo', rowIndex)
+    .then(r => {
+      showLoading(false);
+      if (r.success) { showToast('삭제되었습니다', 'success'); loadData(); }
+      else showToast(r.error, 'error');
+    }).catch(onError);
+}
+
+// ── 결제 취소 모달
+function openCancelPaymentModal(studentName, rowIndex) {
+  const s = state.data.students.find(st => st.name === studentName);
+  if (!s) { showToast('학생 정보를 찾을 수 없습니다', 'error'); return; }
+  document.getElementById('modal-title').textContent = `💳 결제 취소 — ${studentName}`;
+  document.getElementById('modal-body').innerHTML = `
+    <div class="info-box" style="border-color:var(--danger);margin-bottom:16px;">
+      ⚠️ 결제를 취소하면 수강권이 초기화됩니다.<br>
+      <span style="font-size:12px;color:var(--text2);">현재: ${s.usedSessions}/${s.totalSessions}회 (잔여 ${s.remaining}회)</span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">취소 후 수강 횟수 (0이면 완전 초기화)</label>
+      <input class="form-control" id="cancel-pay-sessions" type="number" value="0" min="0">
+    </div>
+    <div class="form-group">
+      <label class="form-label">취소 사유</label>
+      <input class="form-control" id="cancel-pay-reason" placeholder="취소 사유 입력 (선택)">
+    </div>`;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeModal()">닫기</button>
+    <button class="btn btn-danger" onclick="processCancelPayment('${studentName}',${rowIndex})">결제 취소 확정</button>`;
+  openModal();
+}
+
+function processCancelPayment(studentName, rowIndex) {
+  const sessions = parseInt(document.getElementById('cancel-pay-sessions')?.value || '0');
+  const reason   = document.getElementById('cancel-pay-reason')?.value || '';
+  if (!confirm(`"${studentName}" 학생의 결제를 취소할까요?
+취소 후 수강 횟수: ${sessions}회`)) return;
+  closeModal(); showLoading(true);
+  callAPI('cancelPayment', { studentName, remainingSessions: sessions, reason })
+    .then(r => {
+      showLoading(false);
+      if (r.success) { showToast(r.message || '결제가 취소되었습니다', 'success'); loadData(); }
+      else showToast(r.error || '취소 실패', 'error');
+    }).catch(onError);
+}
 // ============================================================
 // LOADING
 // ============================================================
