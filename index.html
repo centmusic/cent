@@ -1381,6 +1381,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
             선생님들이 자신의 페이지에 입장하면 팝업으로 표시됩니다. 하루 1회 노출.
           </div>
           <div class="form-group">
+            <label class="form-label">공지 대상</label>
+            <select class="form-control" id="admin-notice-target">
+              <option value="전체공지">📢 전체 선생님</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label class="form-label">공지 내용</label>
             <textarea id="admin-notice-input" rows="4" class="form-control"
               placeholder="선생님들에게 전달할 공지사항을 입력하세요..."
@@ -2071,7 +2077,7 @@ function renderStudents() {
   // Stats
   const total = students.length;
   const enrolled = students.filter(s => s.status === '등록').length;
-  const needPay = students.filter(s => s.needPayment).length;
+  const needPay = students.filter(s => s.needPayment && s.status !== '퇴원').length;
   const consulting = students.filter(s => s.status === '상담').length;
   document.getElementById('students-stats').innerHTML = `
     <div class="stat-card primary"><div class="stat-label">전체 학생</div><div class="stat-value">${total}</div></div>
@@ -2785,7 +2791,7 @@ function renderStats() {
   // ── 현재 등록 중
   const enrolled     = students.filter(s => s.status === '등록');
   // ── 결제 필요
-  const needPay      = students.filter(s => s.needPayment);
+  const needPay      = students.filter(s => s.needPayment && s.status !== '퇴원');
   // ── 이번달 수업 횟수
   const monthAtt     = attendance.filter(a => a.classDate && a.classDate.startsWith(ym));
   // ── 전월 수업 횟수
@@ -3114,7 +3120,7 @@ function getAIInsight() {
     return `${t.name}(총${tAtt.length}회 - ${detail||'없음'})`;
   }).join(' | ');
 
-  const needPay = students.filter(s => s.needPayment).map(s => s.name).join(', ') || '없음';
+  const needPay = students.filter(s => s.needPayment && s.status !== '퇴원').map(s => s.name).join(', ') || '없음';
   const prompt = `당신은 학원 운영 컨설턴트입니다. 다음 데이터를 바탕으로 한국어로 핵심 인사이트를 3~4줄로 간결하게 알려주세요.
 
 📅 분석 기간: ${d.getFullYear()}년 ${d.getMonth()+1}월
@@ -4091,27 +4097,34 @@ function deselectAllNeedPay() {
 // 공지사항 팝업
 // ============================================================
 function showNoticeIfAny() {
-  // 메모 중 타입이 '공지'인 것 (teacherTarget === '공지')
+  const myName = state.currentTeacher;
+  // 본인에게 해당하는 공지: 전체공지 OR 자기 이름 대상
   const notices = (state.data.memos || [])
-    .filter(m => m.teacherTarget === '공지' || m.teacherTarget === '전체공지')
+    .filter(m => m.teacherTarget === '전체공지' || m.teacherTarget === myName)
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
   if (notices.length === 0) return;
 
-  const latest = notices[0];
-
-  // 오늘 날짜 키로 로컬 스토리지 확인 (이미 확인한 경우 스킵)
+  // 오늘 확인하지 않은 최신 공지 찾기
   const todayKey = 'notice_confirmed_' + new Date().toISOString().slice(0, 10);
-  const confirmedId = sessionStorage.getItem(todayKey);
-  if (confirmedId === String(latest.rowIndex)) return;
+  const confirmedIds = (sessionStorage.getItem(todayKey) || '').split(',');
+
+  const latest = notices.find(n => !confirmedIds.includes(String(n.rowIndex)));
+  if (!latest) return;
+
+  // 대상 표시
+  const targetLabel = latest.teacherTarget === '전체공지'
+    ? '📢 전체 공지'
+    : `👩‍🏫 ${latest.teacherTarget} 선생님 전용 공지`;
 
   // 팝업 표시
   document.getElementById('notice-content').textContent = latest.content;
-  document.getElementById('notice-date').textContent = '작성일: ' + (latest.createdAt || '');
-  const overlay = document.getElementById('notice-overlay');
-  overlay.style.display = 'flex';
-  // 저장: 이 공지를 오늘 확인함
-  sessionStorage.setItem(todayKey, String(latest.rowIndex));
+  document.getElementById('notice-date').textContent = targetLabel + ' · ' + (latest.createdAt || '');
+  document.getElementById('notice-overlay').style.display = 'flex';
+
+  // 확인 기록 (오늘 날짜에 복수 저장)
+  confirmedIds.push(String(latest.rowIndex));
+  sessionStorage.setItem(todayKey, confirmedIds.filter(Boolean).join(','));
 }
 
 function closeNotice() {
@@ -4121,10 +4134,13 @@ function closeNotice() {
 
 // ── 관리자 공지 등록
 function postAdminNotice() {
-  const text = (document.getElementById('admin-notice-input')?.value || '').trim();
+  const text   = (document.getElementById('admin-notice-input')?.value || '').trim();
+  const target = document.getElementById('admin-notice-target')?.value || '전체공지';
   if (!text) { showToast('공지 내용을 입력하세요', 'warning'); return; }
-  if (!confirm('공지를 등록할까요? 모든 선생님이 다음 입장 시 팝업으로 확인합니다.')) return;
-  const d = { teacherTarget: '전체공지', author: '관리자', content: text };
+  const targetLabel = target === '전체공지' ? '모든 선생님' : target + ' 선생님';
+  if (!confirm(`${targetLabel}에게 공지를 등록할까요?
+다음 입장 시 팝업으로 확인합니다.`)) return;
+  const d = { teacherTarget: target, author: '관리자', content: text };
   showLoading(true);
   callAPI('addMemo', d)
     .then(r => {
@@ -4139,25 +4155,50 @@ function postAdminNotice() {
 
 // ── 관리자 공지 목록 렌더링 (선생님관리 탭)
 function renderAdminNotices() {
+  // 선생님 목록으로 드롭다운 채우기
+  const targetSel = document.getElementById('admin-notice-target');
+  if (targetSel) {
+    const curVal = targetSel.value || '전체공지';
+    targetSel.innerHTML = '<option value="전체공지">📢 전체 선생님</option>';
+    (state.data.teachers || []).forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.name;
+      opt.textContent = '👩‍🏫 ' + t.name + ' 선생님만';
+      targetSel.appendChild(opt);
+    });
+    targetSel.value = curVal;
+  }
+
   const wrap = document.getElementById('admin-notice-list');
   if (!wrap) return;
+
+  // 전체공지 + 특정선생님 공지 모두 표시
   const notices = (state.data.memos || [])
-    .filter(m => m.teacherTarget === '전체공지')
+    .filter(m => m.teacherTarget === '전체공지' || (state.data.teachers||[]).some(t => t.name === m.teacherTarget && m.author === '관리자'))
     .sort((a, b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+
   if (notices.length === 0) {
     wrap.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:12px;">등록된 공지가 없습니다</div>';
     return;
   }
+
   wrap.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px;">등록된 공지 (${notices.length}건)</div>` +
-    notices.slice(0, 5).map(m => `
+    notices.slice(0, 10).map(m => {
+      const isAll = m.teacherTarget === '전체공지';
+      const targetLabel = isAll
+        ? '<span style="font-size:11px;background:var(--primary-dim);color:var(--primary);border-radius:10px;padding:2px 8px;font-weight:700;">전체</span>'
+        : `<span style="font-size:11px;background:var(--accent-dim);color:var(--accent);border-radius:10px;padding:2px 8px;font-weight:700;">👩‍🏫 ${m.teacherTarget}</span>`;
+      return `
     <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start;">
       <div style="flex:1;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">${targetLabel}</div>
         <div style="font-size:14px;color:var(--text);white-space:pre-wrap;margin-bottom:4px;">${m.content}</div>
         <div style="font-size:12px;color:var(--text3);">${m.createdAt||''}</div>
       </div>
       <button onclick="deleteAdminNotice(${m.rowIndex})"
         style="background:none;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;flex-shrink:0;">삭제</button>
-    </div>`).join('');
+    </div>`;
+    }).join('');
 }
 
 function deleteAdminNotice(rowIndex) {
