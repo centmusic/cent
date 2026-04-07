@@ -1895,8 +1895,27 @@ function loadData() {
 
 function onDataLoaded(data) {
   showLoading(false);
-  if (data.error) { showToast('데이터 오류: ' + data.error, 'error'); return; }
-  state.data = data;
+  if (data.error) {
+    showToast('데이터 오류: ' + data.error, 'error');
+    // 에러가 있어도 빈 배열로 초기화 (화면이 완전히 빈 채로 멈추지 않도록)
+    state.data = {
+      students:   data.students   || [],
+      teachers:   data.teachers   || [],
+      attendance: data.attendance || [],
+      timetable:  data.timetable  || [],
+      memos:      data.memos      || [],
+      payments:   data.payments   || []
+    };
+  } else {
+    state.data = {
+      students:   data.students   || [],
+      teachers:   data.teachers   || [],
+      attendance: data.attendance || [],
+      timetable:  data.timetable  || [],
+      memos:      data.memos      || [],
+      payments:   data.payments   || []
+    };
+  }
 
   // 홈 선생님 드롭다운 갱신
   const sel = document.getElementById('teacher-select');
@@ -3152,27 +3171,28 @@ function renderPayments() {
 
   const { payments, students } = state.data;
 
-  // 결제기록 배열 우선 사용, 없으면 students fallback (기존 데이터 호환)
-  let paid;
-  if (payments && payments.length > 0) {
-    // 결제기록 행 기반 (새 방식)
-    paid = payments.filter(p => p.paymentDate && p.paymentDate.startsWith(ym));
-  } else {
-    // 기존 학생 행 기반 fallback
-    paid = students
-      .filter(s => s.paymentDate && s.paymentDate.startsWith(ym))
-      .map(s => ({
-        rowIndex: s.rowIndex,
-        studentName: s.name,
-        teacher: s.teacher,
-        packageType: s.packageType,
-        totalSessions: s.totalSessions,
-        paymentAmount: s.paymentAmount,
-        paymentMemo: s.paymentMemo,
-        studentType: s.studentType,
-        paymentDate: s.paymentDate
-      }));
-  }
+  // 결제기록 행 + 기존 학생 행 모두 합쳐서 표시 (누락 없이)
+  const payFromHistory = (payments || [])
+    .filter(p => p.paymentDate && p.paymentDate.startsWith(ym));
+
+  // 결제기록 행이 없는 학생(기존 데이터)은 학생 행에서 보충
+  const historyNames = new Set(payFromHistory.map(p => p.studentName));
+  const payFromStudents = (students || [])
+    .filter(s => s.paymentDate && s.paymentDate.startsWith(ym) && !historyNames.has(s.name))
+    .map(s => ({
+      rowIndex: s.rowIndex,
+      studentName: s.name,
+      teacher: s.teacher,
+      packageType: s.packageType,
+      totalSessions: s.totalSessions,
+      paymentAmount: s.paymentAmount,
+      paymentMemo: s.paymentMemo,
+      studentType: s.studentType,
+      paymentDate: s.paymentDate
+    }));
+
+  const paid = [...payFromHistory, ...payFromStudents]
+    .sort((a, b) => (b.paymentDate || '').localeCompare(a.paymentDate || ''));
 
   // 이번달 총 결제금액
   const totalAmt = paid.reduce((sum, p) => sum + (Number(p.paymentAmount) || 0), 0);
@@ -3203,9 +3223,7 @@ function renderPayments() {
     return;
   }
 
-  // 결제일 최신순 정렬
-  const sorted = [...paid].sort((a, b) => (b.paymentDate || '').localeCompare(a.paymentDate || ''));
-  const rows = sorted.map(p => {
+  const rows = paid.map(p => {
     const amt    = Number(p.paymentAmount) || 0;
     const fmtAmt = amt ? amt.toLocaleString('ko-KR') + '원' : '—';
     const tp     = p.studentType || '';
