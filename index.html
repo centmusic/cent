@@ -1862,7 +1862,7 @@ const state = {
   currentTeacher: null,
   adminTab: 'students',
   teacherTab: 'today',
-  data: { students: [], teachers: [], attendance: [], timetable: [], memos: [] },
+  data: { students: [], teachers: [], attendance: [], timetable: [], memos: [], payments: [] },
   studentFilter: '전체',
   studentSort: 'name',      // 'name' | 'teacher' | 'subject'
   studentPage: 1,
@@ -2463,22 +2463,17 @@ function openPaymentModal(studentName) {
     <div class="form-group"><label class="form-label">총 횟수</label>
       <input class="form-control" id="pay-total" type="number" value="4" min="1"></div>
     <div class="form-group"><label class="form-label">결제 금액</label>
-      <select class="form-control" id="pay-amount">
-        <option value="">직접 입력</option>
+      <select class="form-control" id="pay-amount"
+        onchange="document.getElementById('pay-amount-custom-wrap').style.display=this.value===''?'block':'none';">
+        <option value="">✏️ 직접 입력</option>
         <option value="129000">129,000원</option>
         <option value="139000">139,000원</option>
         <option value="360000">360,000원</option>
       </select></div>
-    <div class="form-group" id="pay-amount-custom-wrap" style="display:none">
-      <label class="form-label">직접 입력 (원)</label>
-      <input class="form-control" id="pay-amount-custom" type="number" placeholder="금액 입력"></div>
-  `;
-  document.getElementById('pay-amount').addEventListener('change', function() {
-    document.getElementById('pay-amount-custom-wrap').style.display = this.value === '' ? 'flex' : 'none';
-  });
-  // 결제 메모 + 결제수단 필드 추가
-  document.getElementById('modal-body').innerHTML +=
-    `<div class="form-group"><label class="form-label">결제 수단 / 메모</label>
+    <div class="form-group" id="pay-amount-custom-wrap" style="display:none;">
+      <label class="form-label">금액 직접 입력 (원)</label>
+      <input class="form-control" id="pay-amount-custom" type="number" placeholder="예: 150000"></div>
+    <div class="form-group"><label class="form-label">결제 수단</label>
       <select class="form-control" id="pay-memo">
         <option value="">선택 안 함</option>
         <option value="계좌이체">💳 계좌이체</option>
@@ -2486,7 +2481,8 @@ function openPaymentModal(studentName) {
         <option value="현금영수증">🧾 현금영수증</option>
         <option value="카드">💳 카드</option>
         <option value="카카오페이">📱 카카오페이</option>
-      </select></div>`;
+      </select></div>
+  `;
   document.getElementById('modal-footer').innerHTML = `
     <button class="btn btn-secondary" onclick="closeModal()">취소</button>
     <button class="btn btn-success" onclick="processPayment('${studentName}')">✅ 결제 완료</button>`;
@@ -3154,21 +3150,46 @@ function renderPayments() {
   const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   document.getElementById('payments-month-label').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월`;
 
-  const { students } = state.data;
+  const { payments, students } = state.data;
 
-  // 결제일이 해당 월인 학생 필터
-  const paid = students.filter(s => s.paymentDate && s.paymentDate.startsWith(ym));
+  // 결제기록 배열 우선 사용, 없으면 students fallback (기존 데이터 호환)
+  let paid;
+  if (payments && payments.length > 0) {
+    // 결제기록 행 기반 (새 방식)
+    paid = payments.filter(p => p.paymentDate && p.paymentDate.startsWith(ym));
+  } else {
+    // 기존 학생 행 기반 fallback
+    paid = students
+      .filter(s => s.paymentDate && s.paymentDate.startsWith(ym))
+      .map(s => ({
+        rowIndex: s.rowIndex,
+        studentName: s.name,
+        teacher: s.teacher,
+        packageType: s.packageType,
+        totalSessions: s.totalSessions,
+        paymentAmount: s.paymentAmount,
+        paymentMemo: s.paymentMemo,
+        studentType: s.studentType,
+        paymentDate: s.paymentDate
+      }));
+  }
 
   // 이번달 총 결제금액
-  const totalAmt = paid.reduce((sum, s) => sum + (Number(s.paymentAmount) || 0), 0);
+  const totalAmt = paid.reduce((sum, p) => sum + (Number(p.paymentAmount) || 0), 0);
+  // 이번달 결제 인원 (중복 학생 제거)
+  const paidNames = new Set(paid.map(p => p.studentName));
 
   const typeColor = { '악기':'var(--primary)', '보컬':'var(--purple)', '입시':'var(--warning)' };
   const typeIcon  = { '악기':'🎸', '보컬':'🎤', '입시':'📚' };
 
   let html = `<div class="stats-grid" style="margin-bottom:20px;">
     <div class="stat-card success">
-      <div class="stat-label">이번달 결제 인원</div>
-      <div class="stat-value">${paid.length}명</div>
+      <div class="stat-label">이번달 결제 건수</div>
+      <div class="stat-value">${paid.length}건</div>
+    </div>
+    <div class="stat-card accent">
+      <div class="stat-label">결제 인원</div>
+      <div class="stat-value">${paidNames.size}명</div>
     </div>
     <div class="stat-card primary">
       <div class="stat-label">이번달 총 결제금액</div>
@@ -3182,36 +3203,35 @@ function renderPayments() {
     return;
   }
 
-  // 모든 결제 학생 테이블 (결제일 순 정렬)
+  // 결제일 최신순 정렬
   const sorted = [...paid].sort((a, b) => (b.paymentDate || '').localeCompare(a.paymentDate || ''));
-  const rows = sorted.map(s => {
-    const amt    = Number(s.paymentAmount) || 0;
+  const rows = sorted.map(p => {
+    const amt    = Number(p.paymentAmount) || 0;
     const fmtAmt = amt ? amt.toLocaleString('ko-KR') + '원' : '—';
-    const tp     = s.studentType || '';
+    const tp     = p.studentType || '';
     const tBadge = tp
       ? `<span style="background:rgba(255,255,255,0.05);border:1px solid ${typeColor[tp]||'var(--text3)'};
           border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap;
           color:${typeColor[tp]||'var(--text2)'};">${typeIcon[tp]||''} ${tp}</span>`
       : '—';
-    const memoTag = s.paymentMemo
-      ? `<span style="font-size:11px;background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:2px 7px;color:var(--text2);margin-left:4px;white-space:nowrap;">${s.paymentMemo}</span>`
+    const memoTag = p.paymentMemo
+      ? `<span style="font-size:11px;background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:2px 7px;color:var(--text2);margin-left:4px;white-space:nowrap;">${p.paymentMemo}</span>`
       : '';
     return `<tr>
-      <td style="white-space:nowrap;"><b>${s.name}</b></td>
+      <td style="white-space:nowrap;"><b>${p.studentName}</b></td>
       <td>${tBadge}</td>
-      <td style="white-space:nowrap;">${s.teacher||'—'}</td>
-      <td style="white-space:nowrap;">${s.packageType||'—'}</td>
-      <td style="color:var(--primary);font-weight:700;">${s.totalSessions}회</td>
+      <td style="white-space:nowrap;">${p.teacher||'—'}</td>
+      <td style="white-space:nowrap;">${p.packageType||'—'}</td>
+      <td style="color:var(--primary);font-weight:700;">${p.totalSessions}회</td>
       <td style="color:var(--success);font-weight:700;white-space:nowrap;">${fmtAmt}${memoTag}</td>
-      <td style="color:var(--text2);white-space:nowrap;">${s.paymentDate||'—'}</td>
-      <td><button class="btn btn-danger btn-xs" onclick='openCancelPaymentModal("${s.name}",${s.rowIndex})'>취소</button></td>
+      <td style="color:var(--text2);white-space:nowrap;">${p.paymentDate||'—'}</td>
     </tr>`;
   }).join('');
 
   html += `<div class="table-wrap"><table>
     <thead><tr>
       <th>학생명</th><th>유형</th><th>담당 선생님</th><th>수강권</th>
-      <th>횟수</th><th>결제금액/수단</th><th>결제일</th><th>취소</th>
+      <th>횟수</th><th>결제금액/수단</th><th>결제일</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
