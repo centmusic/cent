@@ -1857,6 +1857,15 @@ function gsr(fn, params, successHandler, failHandler) {
 // ============================================================
 // STATE
 // ============================================================
+// 안전한 데이터 접근 헬퍼 — state.data 배열이 undefined여도 [] 반환
+function sd() { return state.data; }
+function sdStudents()    { return (state.data && state.data.students)    || []; }
+function sdTeachers()    { return (state.data && state.data.teachers)    || []; }
+function sdAttendance()  { return (state.data && state.data.attendance)  || []; }
+function sdTimetable()   { return (state.data && state.data.timetable)   || []; }
+function sdMemos()       { return (state.data && state.data.memos)       || []; }
+function sdPayments()    { return (state.data && state.data.payments)    || []; }
+
 const state = {
   currentScreen: 'home',
   currentTeacher: null,
@@ -1994,7 +2003,7 @@ function goTeacher() {
   const memoTarget = document.getElementById('memo-target');
   if (memoTarget) {
     memoTarget.innerHTML = '<option value="공통">📢 전체 공유</option>';
-    state.data.teachers.forEach(t => {
+    sdTeachers().forEach(t => {
       const o = document.createElement('option');
       o.value = t.name; o.textContent = '👩‍🏫 ' + t.name;
       if (t.name === sel.value) o.selected = true;
@@ -2072,7 +2081,7 @@ function setStudentPage(page) {
 }
 
 function renderStudents() {
-  const { students } = state.data;
+  const students = sdStudents();
   const search = (document.getElementById('student-search')?.value || '').toLowerCase();
   let filtered = students.filter(s => {
     if (state.studentFilter !== '전체' && s.status !== state.studentFilter) return false;
@@ -2240,7 +2249,7 @@ function openStudentInfoModal(s) {
 }
 
 function openAddStudentModal() {
-  const teacherOptions = state.data.teachers.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+  const teacherOptions = sdTeachers().map(t => `<option value="${t.name}">${t.name}</option>`).join('');
   document.getElementById('modal-title').textContent = '학생 추가';
   document.getElementById('modal-body').innerHTML = `
     <div class="form-row">
@@ -2331,7 +2340,7 @@ function saveNewStudent() {
 }
 
 function openEditStudentModal(s) {
-  const teacherOptions = state.data.teachers.map(t => `<option value="${t.name}" ${t.name===s.teacher?'selected':''}>${t.name}</option>`).join('');
+  const teacherOptions = sdTeachers().map(t => `<option value="${t.name}" ${t.name===s.teacher?'selected':''}>${t.name}</option>`).join('');
   document.getElementById('modal-title').textContent = '학생 수정';
   document.getElementById('modal-body').innerHTML = `
     <div class="form-row">
@@ -2452,7 +2461,7 @@ function openPaymentModal(studentName) {
   document.getElementById('modal-title').textContent = '💳 결제 처리';
   document.getElementById('modal-body').innerHTML = `
     ${(() => {
-      const s = state.data.students.find(st => st.name === studentName);
+      const s = sdStudents().find(st => st.name === studentName);
       if (!s || s.totalSessions === 0) {
         return `<div class="info-box">📌 <b>${studentName}</b> 학생의 첫 수강권을 등록합니다.</div>`;
       }
@@ -2483,15 +2492,15 @@ function openPaymentModal(studentName) {
       <input class="form-control" id="pay-total" type="number" value="4" min="1"></div>
     <div class="form-group"><label class="form-label">결제 금액</label>
       <select class="form-control" id="pay-amount"
-        onchange="document.getElementById('pay-amount-custom-wrap').style.display=this.value===''?'block':'none';">
-        <option value="">✏️ 직접 입력</option>
+        onchange="document.getElementById('pay-amount-custom-wrap').style.display=this.value==='custom'?'block':'none';">
+        <option value="custom">✏️ 직접 입력</option>
         <option value="129000">129,000원</option>
         <option value="139000">139,000원</option>
         <option value="360000">360,000원</option>
       </select></div>
-    <div class="form-group" id="pay-amount-custom-wrap" style="display:none;">
-      <label class="form-label">금액 직접 입력 (원)</label>
-      <input class="form-control" id="pay-amount-custom" type="number" placeholder="예: 150000"></div>
+    <div class="form-group" id="pay-amount-custom-wrap" style="display:block;">
+      <label class="form-label">금액 입력 (원)</label>
+      <input class="form-control" id="pay-amount-custom" type="number" placeholder="예: 150000" style="font-size:16px;"></div>
     <div class="form-group"><label class="form-label">결제 수단</label>
       <select class="form-control" id="pay-memo">
         <option value="">선택 안 함</option>
@@ -2515,7 +2524,8 @@ function updatePayTotal() {
 function processPayment(studentName) {
   const amtSel = document.getElementById('pay-amount').value;
   const amtCustom = document.getElementById('pay-amount-custom')?.value || '';
-  const paymentAmount = amtSel || amtCustom;
+  // 'custom' 선택 시 직접입력값 사용, 그 외엔 드롭다운 값 사용
+  const paymentAmount = (amtSel === 'custom' || amtSel === '') ? amtCustom : amtSel;
   const d = {
     studentName,
     packageType: document.getElementById('pay-package').value,
@@ -2536,22 +2546,24 @@ function processPayment(studentName) {
 // TEACHERS
 // ============================================================
 function renderTeachers() {
-  const { teachers, attendance } = state.data;
+  const teachers = sdTeachers();
+  const attendance = sdAttendance();
   if (teachers.length === 0) {
     document.getElementById('teachers-table-wrap').innerHTML = `<div class="empty-state"><div class="empty-state-icon">👩‍🏫</div><div class="empty-state-text">등록된 선생님이 없습니다</div></div>`;
     return;
   }
   const now = new Date();
   const thisMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  const allStudents = sdStudents();
   const rows = teachers.map(t => {
-    const monthCount = attendance.filter(a => a.teacherName === t.name && a.classDate && a.classDate.startsWith(thisMonth)).length;
-    const totalCount = attendance.filter(a => a.teacherName === t.name).length;
+    const monthCount   = attendance.filter(a => a.teacherName === t.name && a.classDate && a.classDate.startsWith(thisMonth)).length;
+    const studentCount = allStudents.filter(s => s.teacher === t.name && s.status === '등록').length;
     return `<tr>
       <td><b>${t.name}</b></td>
       <td>${t.phone || '—'}</td>
       <td>${t.memo || '—'}</td>
       <td><span style="color:var(--primary);font-weight:700;">${monthCount}회</span></td>
-      <td><span style="color:var(--text2);">${totalCount}회</span></td>
+      <td><span style="color:var(--accent);font-weight:700;">${studentCount}명</span></td>
       <td>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-secondary btn-xs" onclick='openEditTeacherModal(${JSON.stringify(t)})'>수정</button>
@@ -2563,7 +2575,7 @@ function renderTeachers() {
   document.getElementById('teachers-table-wrap').innerHTML = `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>이름</th><th>연락처</th><th>메모</th><th>이번달 수업</th><th>전체 수업</th><th>관리</th></tr></thead>
+        <thead><tr><th>이름</th><th>연락처</th><th>메모</th><th>이번달 수업</th><th>담당 학생</th><th>관리</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
@@ -2654,13 +2666,13 @@ function renderTimetable() {
 
 function openTimetableSlotModal(teacherName, day, time, existingSlot) {
   // 같은 시간에 이미 있는 슬롯들
-  const slotsAtTime = state.data.timetable.filter(s =>
+  const slotsAtTime = sdTimetable().filter(s =>
     s.teacherName === teacherName && s.dayOfWeek === day && s.startTime === time
   );
 
   // 학생 목록: 선생님 페이지면 담당 학생만, 관리자면 전체
   const isTeacherPage = !!state.currentTeacher;
-  const eligibleStudents = state.data.students.filter(s => {
+  const eligibleStudents = sdStudents().filter(s => {
     if (s.status !== '등록') return false;
     if (isTeacherPage) return s.teacher === teacherName; // 담당 학생만
     return true; // 관리자: 전체
@@ -2797,7 +2809,8 @@ function renderStats() {
   })();
   document.getElementById('stats-month-label').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월`;
 
-  const { students, attendance } = state.data;
+  const students = sdStudents();
+  const attendance = sdAttendance();
 
   // ── 이번달 신규 등록 (createdAt이 ym 으로 시작)
   const newStudents  = students.filter(s => s.createdAt && s.createdAt.startsWith(ym));
@@ -3047,7 +3060,9 @@ function renderSalary() {
   const ym  = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   document.getElementById('salary-month-label').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월`;
 
-  const { teachers, attendance, students } = state.data;
+  const teachers = sdTeachers();
+  const attendance = sdAttendance();
+  const students = sdStudents();
   const monthAtt = attendance.filter(a => a.classDate && a.classDate.startsWith(ym));
 
   // 학생 이름 → 유형 맵
@@ -3169,7 +3184,8 @@ function renderPayments() {
   const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   document.getElementById('payments-month-label').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월`;
 
-  const { payments, students } = state.data;
+  const payments = sdPayments();
+  const students = sdStudents();
 
   // 결제기록 행 + 기존 학생 행 모두 합쳐서 표시 (누락 없이)
   const payFromHistory = (payments || [])
@@ -3269,23 +3285,25 @@ function renderTodayClasses() {
   document.getElementById('today-date-label').textContent = `${now.getFullYear()}년 ${now.getMonth()+1}월 ${now.getDate()}일 (${todayKr}요일)`;
 
   // 오늘 출결 체크한 학생 목록 (중복 포함)
-  const todayAttendance = state.data.attendance
+  const todayAttendance = sdAttendance()
     .filter(a => a.teacherName === teacherName && a.classDate && a.classDate.startsWith(todayStr))
     .map(a => a.studentName);
 
   // 오늘 시간표의 학생들
-  const todaySlots = state.data.timetable
+  const todaySlots = sdTimetable()
     .filter(s => s.teacherName === teacherName && s.dayOfWeek === todayKr && s.linkedStudent)
     .sort((a,b) => a.startTime.localeCompare(b.startTime));
 
   // 담당 학생 전체 (등록 상태)
-  const myStudents = state.data.students.filter(s => s.teacher === teacherName && s.status === '등록');
+  const myStudents = sdStudents().filter(s => s.teacher === teacherName && s.status === '등록');
 
-  // 합치되 시간표 우선, 추가 담당 학생 포함
-  const scheduleStudents = todaySlots.map(s => {
-    const stu = state.data.students.find(st => st.name === s.linkedStudent);
-    return { name: s.linkedStudent, time: s.startTime + ' ~ ' + s.endTime, student: stu };
-  });
+  // 합치되 시간표 우선, 추가 담당 학생 포함 (퇴원 학생 제외)
+  const scheduleStudents = todaySlots
+    .map(s => {
+      const stu = sdStudents().find(st => st.name === s.linkedStudent);
+      return { name: s.linkedStudent, time: s.startTime + ' ~ ' + s.endTime, student: stu };
+    })
+    .filter(s => !s.student || s.student.status !== '퇴원');
   const extraStudents = myStudents
     .filter(s => !scheduleStudents.find(ss => ss.name === s.name))
     .map(s => ({ name: s.name, time: null, student: s }));
@@ -3325,7 +3343,7 @@ function renderTodayClasses() {
       </div>
       <div class="class-card-actions">
         <button class="btn btn-primary" onclick='doCheckAttendance("${name}")'>✅ 출결</button>
-        <button class="btn btn-warning" onclick='doMarkAbsent("${name}")'>⚠️ 결석</button>
+        <button class="btn btn-warning" onclick='doMarkAbsent("${name}")'>⚠️ 당일결석</button>
         ${cancelBtn}
       </div>
     </div>`;
@@ -3356,7 +3374,7 @@ function renderTodayClasses() {
 
 // ── 출결 후 로컬 학생 데이터 업데이트 (전체 재로딩 방지)
 function _updateStudentLocal(studentName, updates) {
-  const s = state.data.students.find(s => s.name === studentName);
+  const s = sdStudents().find(s => s.name === studentName);
   if (!s) return;
   if (updates.usedSessions  !== undefined) s.usedSessions  = updates.usedSessions;
   if (updates.totalSessions !== undefined) s.totalSessions = updates.totalSessions;
@@ -3427,7 +3445,7 @@ function renderTeacherHistory() {
   const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   document.getElementById('teacher-month-label').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월`;
 
-  const myAtt = state.data.attendance.filter(a => a.teacherName === teacherName && a.classDate && a.classDate.startsWith(ym));
+  const myAtt = sdAttendance().filter(a => a.teacherName === teacherName && a.classDate && a.classDate.startsWith(ym));
   const total = myAtt.length;
   const students = [...new Set(myAtt.map(a => a.studentName))];
 
@@ -3477,7 +3495,7 @@ function renderTeacherTimetable() {
 
 // 공통 시간표 렌더러 (admin과 teacher 모두 사용)
 function _renderTimetableFor(teacherName, containerId, editable) {
-  const slots = state.data.timetable.filter(s => s.teacherName === teacherName);
+  const slots = sdTimetable().filter(s => s.teacherName === teacherName);
   const todayKr = getTodayDayKr();
 
   // 시간→분 변환으로 범위 커버 계산
@@ -3581,7 +3599,7 @@ function showToast(msg, type = 'success') {
 // ============================================================
 function renderMyStudents() {
   const teacherName = state.currentTeacher;
-  const myStudents = state.data.students.filter(s => s.teacher === teacherName);
+  const myStudents = sdStudents().filter(s => s.teacher === teacherName);
   const wrap = document.getElementById('my-students-wrap');
   if (!wrap) return;
 
@@ -3633,7 +3651,7 @@ function renderMemos() {
   if (!wrap) return;
 
   // 내게 해당하는 메모 + 공통 메모
-  const myMemos = (state.data.memos || [])
+  const myMemos = sdMemos()
     .filter(m => m.teacherTarget === '공통' || m.teacherTarget === teacherName)
     .sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
 
@@ -3704,8 +3722,7 @@ function renderSMSTab() {
 }
 
 function _buildSMSTab() {
-  const { students, attendance } = state.data;
-  const enrolled = students.filter(s => s.status === '등록');
+  const enrolled = sdStudents().filter(s => s.status === '등록');
 
   // 7일 초과 미결제 계산 (smsSentDate는 state.data에 없으므로 별도 로드)
   callAPI('getSMSPageData')
@@ -4136,17 +4153,17 @@ function deselectAllNeedPay() {
 // ============================================================
 function showNoticeIfAny() {
   const myName = state.currentTeacher;
-  // 본인에게 해당하는 공지: 전체공지 OR 자기 이름 대상
-  const notices = (state.data.memos || [])
+  const notices = sdMemos()
     .filter(m => m.teacherTarget === '전체공지' || m.teacherTarget === myName)
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
   if (notices.length === 0) return;
 
-  // 오늘 확인하지 않은 최신 공지 찾기
-  const todayKey = 'notice_confirmed_' + new Date().toISOString().slice(0, 10);
-  const confirmedIds = (sessionStorage.getItem(todayKey) || '').split(',');
+  // 영구 확인 기록: localStorage 사용 (탭 닫아도 유지)
+  const storageKey = 'notice_confirmed_' + myName;
+  const confirmedIds = (localStorage.getItem(storageKey) || '').split(',').filter(Boolean);
 
+  // 아직 확인하지 않은 공지 찾기
   const latest = notices.find(n => !confirmedIds.includes(String(n.rowIndex)));
   if (!latest) return;
 
@@ -4155,18 +4172,43 @@ function showNoticeIfAny() {
     ? '📢 전체 공지'
     : `👩‍🏫 ${latest.teacherTarget} 선생님 전용 공지`;
 
-  // 팝업 표시
   document.getElementById('notice-content').textContent = latest.content;
   document.getElementById('notice-date').textContent = targetLabel + ' · ' + (latest.createdAt || '');
+  document.getElementById('notice-overlay').dataset.noticeId = String(latest.rowIndex);
+  document.getElementById('notice-overlay').dataset.noticeName = myName;
   document.getElementById('notice-overlay').style.display = 'flex';
-
-  // 확인 기록 (오늘 날짜에 복수 저장)
-  confirmedIds.push(String(latest.rowIndex));
-  sessionStorage.setItem(todayKey, confirmedIds.filter(Boolean).join(','));
 }
 
 function closeNotice() {
-  document.getElementById('notice-overlay').style.display = 'none';
+  const overlay = document.getElementById('notice-overlay');
+  const noticeId  = overlay.dataset.noticeId;
+  const noticeName = overlay.dataset.noticeName;
+
+  // 영구 확인 기록 저장
+  if (noticeId && noticeName) {
+    const storageKey = 'notice_confirmed_' + noticeName;
+    const confirmed = (localStorage.getItem(storageKey) || '').split(',').filter(Boolean);
+    if (!confirmed.includes(noticeId)) confirmed.push(noticeId);
+    localStorage.setItem(storageKey, confirmed.join(','));
+  }
+
+  overlay.style.display = 'none';
+
+  // 확인한 공지를 선생님 메모에 자동 저장
+  if (noticeId && noticeName) {
+    const notice = sdMemos().find(m => String(m.rowIndex) === noticeId);
+    if (notice) {
+      const memoContent = `[공지 확인] ${notice.content}`;
+      callAPI('addMemo', {
+        teacherTarget: noticeName,
+        author: '공지확인',
+        content: memoContent
+      }).catch(() => {}); // 실패해도 조용히 무시
+    }
+  }
+
+  // 다음 확인 안 한 공지가 있으면 연속 표시
+  setTimeout(showNoticeIfAny, 300);
 }
 
 
@@ -4198,7 +4240,7 @@ function renderAdminNotices() {
   if (targetSel) {
     const curVal = targetSel.value || '전체공지';
     targetSel.innerHTML = '<option value="전체공지">📢 전체 선생님</option>';
-    (state.data.teachers || []).forEach(t => {
+    sdTeachers().forEach(t => {
       const opt = document.createElement('option');
       opt.value = t.name;
       opt.textContent = '👩‍🏫 ' + t.name + ' 선생님만';
