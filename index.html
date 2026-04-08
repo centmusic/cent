@@ -463,87 +463,105 @@ tbody tr:last-child td { border-bottom: none; }
 .timetable-controls {
   display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
 }
+/* ===== 블록형 시간표 ===== */
 .timetable-wrap {
   border: 1.5px solid var(--border2);
   border-radius: 12px;
   overflow: auto;
   max-width: 100%;
   box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  -webkit-overflow-scrolling: touch;
 }
 .timetable-grid {
-  display: grid;
-  min-width: 500px;
-}
-.timetable-header-row {
-  display: grid;
-  grid-template-columns: 56px repeat(6, 1fr);
-  background: var(--bg2);
-  border-bottom: 2px solid var(--border2);
-  position: sticky; top: 0; z-index: 2;
-}
-.timetable-header-cell {
-  padding: 12px 4px;
-  text-align: center;
-  font-size: 13px; font-weight: 800; color: var(--text2);
-  letter-spacing: 0.02em;
-}
-.timetable-header-cell.today-col {
-  color: var(--primary);
-  background: rgba(79,114,255,0.06);
-}
-.timetable-row {
-  display: grid;
-  grid-template-columns: 56px repeat(6, 1fr);
-  border-bottom: 1px solid var(--border);
-}
-/* 매 정시(xx:00) 줄만 진한 구분선 */
-.timetable-row.hour-start { border-top: 1.5px solid var(--border2); }
-.timetable-row:last-child { border-bottom: none; }
-.timetable-time {
-  padding: 0 8px;
-  font-size: 12px; color: var(--text2); font-weight: 700;
-  display: flex; align-items: center; justify-content: flex-end;
-  border-right: 2px solid var(--border2);
-  background: var(--bg2);
-  min-height: 40px;
-}
-.timetable-time.half-hour { color: var(--text3); font-size: 10px; font-weight: 500; }
-.timetable-cell {
-  min-height: 40px;
-  height: 40px;
-  border-right: 1px solid var(--border);
-  cursor: pointer;
-  transition: background 0.12s;
-  display: flex; align-items: center; justify-content: center;
-  padding: 3px;
+  display: flex;
+  flex-direction: row;
+  min-width: 360px;
   position: relative;
+}
+/* 시간 축 */
+.tt-time-col {
+  width: 44px;
+  flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--bg2);
+  border-right: 2px solid var(--border2);
+}
+.tt-time-label {
+  height: 60px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 4px 6px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+.tt-time-label.tt-header { height: 36px; font-size: 10px; border-bottom: 2px solid var(--border2); }
+/* 요일 컬럼 */
+.tt-day-col {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  border-right: 1px solid var(--border);
   overflow: hidden;
 }
-.timetable-cell:last-child { border-right: none; }
-.timetable-cell:hover { background: rgba(79,114,255,0.1); }
-.timetable-cell.today-col { background: rgba(79,114,255,0.04); }
-.timetable-cell.today-col:hover { background: rgba(79,114,255,0.12); }
-.timetable-cell.has-class {
-  background: rgba(79,114,255,0.15);
-  border-left: 4px solid var(--primary);
-  padding-left: 2px;
+.tt-day-col:last-child { border-right: none; }
+.tt-day-header {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text2);
+  background: var(--bg2);
+  border-bottom: 2px solid var(--border2);
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
-.timetable-cell.has-class.today-col {
-  background: rgba(79,114,255,0.25);
+.tt-day-header.today { color: var(--primary); background: rgba(79,114,255,0.08); }
+/* 시간 배경 행 */
+.tt-hour-row {
+  height: 60px;
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: background 0.1s;
 }
-/* 수업 칸의 이름 태그 */
-.timetable-slot-content {
-  background: var(--primary);
-  color: #fff;
-  border-radius: 6px;
-  padding: 3px 6px;
-  font-size: 11px; font-weight: 700;
-  text-align: center;
+.tt-hour-row:hover { background: rgba(79,114,255,0.07); }
+.tt-hour-row.today-bg { background: rgba(79,114,255,0.03); }
+/* 수업 블록 */
+.tt-block {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  border-radius: 8px;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-weight: 700;
   line-height: 1.4;
-  width: 100%;
-  word-break: break-word;
-  white-space: normal;
-  box-shadow: 0 1px 4px rgba(79,114,255,0.4);
+  overflow: hidden;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: filter 0.15s, transform 0.1s;
+  z-index: 1;
+  word-break: break-all;
+}
+.tt-block:hover { filter: brightness(1.1); transform: scaleX(0.97); }
+.tt-block:active { filter: brightness(0.9); }
+/* 오늘 컬럼 강조선 */
+.tt-day-col.today::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: 0; right: 0;
+  background: rgba(79,114,255,0.03);
+  pointer-events: none;
+  z-index: 0;
 }
 
 /* ===== SETTLEMENT ===== */
@@ -723,8 +741,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .modal-footer .btn { min-height: 50px; font-size: 16px; border-radius: 14px; }
 
   /* 시간표 */
-  .timetable-header-row, .timetable-row { grid-template-columns: 44px repeat(7, 1fr); }
-  .timetable-header-cell, .timetable-time { font-size: 10px; }
+  .tt-time-col { width: 36px; }
+  .tt-time-label { height: 50px; font-size: 10px; }
+  .tt-day-header { font-size: 11px; }
+  .tt-hour-row { height: 50px; }
+  .tt-block { font-size: 10px; border-radius: 6px; }
 
   /* 토스트 */
   #toast-container { bottom: 90px; right: 12px; left: 12px; }
@@ -1090,35 +1111,33 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   border-radius: 10px !important;
   overflow: auto !important;
   -webkit-overflow-scrolling: touch !important;
-  /* 가로 스크롤 허용, 세로는 콘텐츠 높이 */
   width: 100% !important;
 }
-/* 가로 너비를 화면에 맞게 — vw 기반으로 축소 */
 #screen-teacher .timetable-grid {
   min-width: unset !important;
   width: 100% !important;
 }
-#screen-teacher .timetable-header-row,
-#screen-teacher .timetable-row {
-  grid-template-columns: 38px repeat(6, 1fr) !important;
+#screen-teacher .tt-time-col {
+  width: 36px !important;
 }
-#screen-teacher .timetable-header-cell {
+#screen-teacher .tt-time-label {
+  height: 50px !important;
+  font-size: 10px !important;
+}
+#screen-teacher .tt-time-label.tt-header {
+  height: 30px !important;
+}
+#screen-teacher .tt-day-header {
+  height: 30px !important;
   font-size: 11px !important;
-  padding: 6px 1px !important;
-  text-align: center !important;
 }
-#screen-teacher .timetable-time {
-  font-size: 9px !important;
-  padding: 0 2px !important;
-  justify-content: center !important;
+#screen-teacher .tt-hour-row {
+  height: 50px !important;
 }
-#screen-teacher .timetable-cell {
-  min-height: 28px !important;
-  height: 28px !important;
-}
-#screen-teacher .timetable-slot-content {
-  font-size: 9px !important;
-  padding: 1px 2px !important;
+#screen-teacher .tt-block {
+  font-size: 10px !important;
+  padding: 2px 4px !important;
+  border-radius: 6px !important;
 }
 
 /* ╔════════════════════════════════════╗
@@ -3493,77 +3512,108 @@ function renderTeacherTimetable() {
   _renderTimetableFor(teacherName, 'teacher-timetable-container', true);
 }
 
-// 공통 시간표 렌더러 (admin과 teacher 모두 사용)
+// ── 학생별 고정 색상 생성 (이름 기반 해시)
+function getStudentColor_(name) {
+  const COLORS = [
+    '#E57373','#F06292','#BA68C8','#7986CB',
+    '#4FC3F7','#4DB6AC','#81C784','#FFD54F',
+    '#FF8A65','#A1887F','#90A4AE','#F48FB1',
+    '#CE93D8','#80DEEA','#A5D6A7','#FFCC02',
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return COLORS[Math.abs(hash) % COLORS.length];
+}
+
+// 배경색 대비로 텍스트 색상 결정 (흰/검)
+function getContrastColor_(hexColor) {
+  const r = parseInt(hexColor.slice(1,3),16);
+  const g = parseInt(hexColor.slice(3,5),16);
+  const b = parseInt(hexColor.slice(5,7),16);
+  const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
+  return lum > 0.55 ? '#1a1a2e' : '#ffffff';
+}
+
+// 공통 시간표 렌더러 — 블록형 (admin과 teacher 모두 사용)
 function _renderTimetableFor(teacherName, containerId, editable) {
   const slots = sdTimetable().filter(s => s.teacherName === teacherName);
   const todayKr = getTodayDayKr();
 
-  // 시간→분 변환으로 범위 커버 계산
-  function getCovering(day, time) {
-    const tMin = timeToMin_(time);
-    return slots.filter(s =>
-      s.dayOfWeek === day &&
-      timeToMin_(s.startTime) <= tMin &&
-      tMin < timeToMin_(s.endTime)
-    );
+  // 표시 시간 범위: 슬롯 최소/최대 기준 (없으면 기본 13~22시)
+  let minHour = 13, maxHour = 22;
+  if (slots.length > 0) {
+    const allMins = slots.flatMap(s => [timeToMin_(s.startTime), timeToMin_(s.endTime)]).filter(m => m > 0);
+    if (allMins.length > 0) {
+      minHour = Math.max(8,  Math.floor(Math.min(...allMins) / 60) - 0);
+      maxHour = Math.min(23, Math.ceil(Math.max(...allMins) / 60) + 1);
+    }
   }
 
-  let headerCells = `<div class="timetable-header-cell">시간</div>`;
-  DAYS.forEach(d => {
-    const isToday = d === todayKr;
-    headerCells += `<div class="timetable-header-cell ${isToday?'today-col':''}">${d}${isToday?'<br><span style="font-size:9px;color:var(--accent)">TODAY</span>':''}</div>`;
-  });
+  // 시간 축 레이블 (정시만)
+  const hourCount = maxHour - minHour;
+  const PX_PER_HOUR = 60; // 1시간 = 60px
 
-  // 슬롯별 "첫 번째 표시 셀" 미리 계산 (커스텀 시간 대응)
-  // 각 슬롯에 대해 TIMES 중 startTime 이상인 첫 번째 셀을 firstCell로 지정
-  const slotFirstCell = {}; // key: day_slotIdx
-  slots.forEach((slot, idx) => {
-    const startMin = timeToMin_(slot.startTime);
-    const firstTime = TIMES.find(t => timeToMin_(t) >= startMin);
-    if (firstTime) slotFirstCell[`${slot.dayOfWeek}_${idx}`] = firstTime;
-  });
+  // 시간축 HTML
+  // 마지막 시간(maxHour)은 높이 없는 마커로 처리 → 요일 행과 높이 일치
+  let timeLabels = `<div class="tt-time-label tt-header"></div>`;
+  for (let h = minHour; h < maxHour; h++) {
+    timeLabels += `<div class="tt-time-label">${h}:00</div>`;
+  }
+  // 마지막 시간 마커 (높이 0, 그냥 레이블)
+  timeLabels += `<div style="padding:0 6px 0 0;font-size:11px;font-weight:700;color:var(--text2);text-align:right;">${maxHour}:00</div>`;
 
-  let rows = '';
-  TIMES.forEach(time => {
-    const halfHour = time.endsWith(':30');
-    let cells = `<div class="timetable-time${halfHour ? ' half-hour' : ''}">${time}</div>`;
-    DAYS.forEach(day => {
-      const isToday = day === todayKr;
-      const covering = getCovering(day, time);
+  // 요일 컬럼 HTML
+  let dayCols = '';
+  DAYS.forEach(day => {
+    const isToday = day === todayKr;
+    const daySlots = slots.filter(s => s.dayOfWeek === day);
 
-      if (covering.length > 0) {
-        // 이 셀에서 이름을 표시할 슬롯: 이 셀이 해당 슬롯의 firstCell인 것
-        const displaySlots = covering.filter((s, idx) => {
-          const globalIdx = slots.indexOf(s);
-          return slotFirstCell[`${day}_${globalIdx}`] === time;
-        });
-        const names = displaySlots.length > 0
-          ? displaySlots.map(s => s.linkedStudent||'수업').join('<br>')
-          : covering.map(s => s.linkedStudent||'수업').join('<br>'); // fallback
-        const showText = displaySlots.length > 0;
-        const clickAttr = editable
-          ? `onclick='openTimetableSlotModal("${teacherName}","${day}","${time}",${JSON.stringify(covering[0])})'`
-          : 'style="cursor:default"';
-        const textStyle = showText ? '' : 'opacity:0;pointer-events:none;';
-        cells += `<div class="timetable-cell has-class ${isToday?'today-col':''}" ${clickAttr}>
-          <div class="timetable-slot-content" style="${textStyle}font-size:11px;line-height:1.3;">${names}</div>
-        </div>`;
-      } else {
-        const clickAttr = editable
-          ? `onclick='openTimetableSlotModal("${teacherName}","${day}","${time}",null)'`
-          : '';
-        cells += `<div class="timetable-cell ${isToday?'today-col':''}" ${clickAttr}></div>`;
-      }
+    // 배경 클릭용 행 (정시 단위)
+    let hourRows = '';
+    for (let h = minHour; h < maxHour; h++) {
+      const clickTime = `${h}:00`;
+      const clickAttr = editable
+        ? `onclick='openTimetableSlotModal("${teacherName}","${day}","${clickTime}",null)'`
+        : '';
+      hourRows += `<div class="tt-hour-row${isToday?' today-bg':''}" ${clickAttr}></div>`;
+    }
+
+    // 수업 블록
+    let blocks = '';
+    daySlots.forEach(slot => {
+      const startMin = timeToMin_(slot.startTime) - minHour * 60;
+      // endTime 없으면 30분으로 기본값
+      const rawEnd   = slot.endTime || '';
+      const endMin   = rawEnd ? (timeToMin_(rawEnd) - minHour * 60) : (startMin + 30);
+      const topPx    = Math.max(0, (startMin / 60) * PX_PER_HOUR);
+      const heightPx = Math.max(24, ((endMin - startMin) / 60) * PX_PER_HOUR - 2);
+      const bgColor  = getStudentColor_(slot.linkedStudent || '수업');
+      const txtColor = getContrastColor_(bgColor);
+      const label    = slot.linkedStudent || '수업';
+      const timeStr  = `${slot.startTime}~${slot.endTime}`;
+      const clickAttr = editable
+        ? `onclick='openTimetableSlotModal("${teacherName}","${day}","${slot.startTime}",${JSON.stringify(slot)})'`
+        : '';
+      blocks += `<div class="tt-block" ${clickAttr}
+        style="top:${36 + topPx}px;height:${heightPx}px;background:${bgColor};color:${txtColor};">
+        <div style="font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</div>
+        ${heightPx > 28 ? `<div style="font-size:9px;opacity:0.85;margin-top:1px;">${timeStr}</div>` : ''}
+      </div>`;
     });
-    const isHour = time.endsWith(':00');
-    rows += `<div class="timetable-row${isHour ? ' hour-start' : ''}">${cells}</div>`;
+
+    dayCols += `<div class="tt-day-col${isToday?' today':''}">
+      <div class="tt-day-header${isToday?' today':''}">${day}${isToday?'<span style="font-size:8px;color:var(--accent);margin-left:2px;">TODAY</span>':''}</div>
+      ${hourRows}
+      ${blocks}
+    </div>`;
   });
 
+  const totalHeight = 36 + hourCount * PX_PER_HOUR + 20; // 마지막 레이블 여백
   document.getElementById(containerId).innerHTML = `
     <div class="timetable-wrap">
-      <div class="timetable-grid">
-        <div class="timetable-header-row">${headerCells}</div>
-        ${rows}
+      <div class="timetable-grid" style="height:${totalHeight}px;">
+        <div class="tt-time-col">${timeLabels}</div>
+        ${dayCols}
       </div>
     </div>`;
 }
