@@ -3228,7 +3228,13 @@ function renderPayments() {
     }));
 
   const paid = [...payFromHistory, ...payFromStudents]
-    .sort((a, b) => (b.paymentDate || '').localeCompare(a.paymentDate || ''));
+    .sort((a, b) => {
+      // 1차: 결제일 내림차순
+      const dateDiff = (b.paymentDate || '').localeCompare(a.paymentDate || '');
+      if (dateDiff !== 0) return dateDiff;
+      // 2차: 같은 날이면 rowIndex 내림차순 (나중에 추가된 것이 위)
+      return (b.rowIndex || 0) - (a.rowIndex || 0);
+    });
 
   // 이번달 총 결제금액
   const totalAmt = paid.reduce((sum, p) => sum + (Number(p.paymentAmount) || 0), 0);
@@ -3259,7 +3265,7 @@ function renderPayments() {
     return;
   }
 
-  const rows = paid.map(p => {
+  const rows = paid.map((p, idx) => {
     const amt    = Number(p.paymentAmount) || 0;
     const fmtAmt = amt ? amt.toLocaleString('ko-KR') + '원' : '—';
     const tp     = p.studentType || '';
@@ -3279,13 +3285,14 @@ function renderPayments() {
       <td style="color:var(--primary);font-weight:700;">${p.totalSessions}회</td>
       <td style="color:var(--success);font-weight:700;white-space:nowrap;">${fmtAmt}${memoTag}</td>
       <td style="color:var(--text2);white-space:nowrap;">${p.paymentDate||'—'}</td>
+      <td><button class="btn btn-danger btn-xs" onclick='openCancelPaymentModal("${p.studentName}",${p.rowIndex})'>취소</button></td>
     </tr>`;
   }).join('');
 
   html += `<div class="table-wrap"><table>
     <thead><tr>
       <th>학생명</th><th>유형</th><th>담당 선생님</th><th>수강권</th>
-      <th>횟수</th><th>결제금액/수단</th><th>결제일</th>
+      <th>횟수</th><th>결제금액/수단</th><th>결제일</th><th>취소</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
