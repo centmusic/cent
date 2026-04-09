@@ -3237,9 +3237,9 @@ function renderPayments() {
     });
 
   // 이번달 총 결제금액
-  const totalAmt = paid.reduce((sum, p) => sum + (Number(p.paymentAmount) || 0), 0);
+  const totalAmt = paid.filter(p => !p.isCancelled).reduce((sum, p) => sum + (Number(p.paymentAmount) || 0), 0);
   // 이번달 결제 인원 (중복 학생 제거)
-  const paidNames = new Set(paid.map(p => p.studentName));
+  const paidNames = new Set(paid.filter(p => !p.isCancelled).map(p => p.studentName));
 
   const typeColor = { '악기':'var(--primary)', '보컬':'var(--purple)', '입시':'var(--warning)' };
   const typeIcon  = { '악기':'🎸', '보컬':'🎤', '입시':'📚' };
@@ -3266,6 +3266,7 @@ function renderPayments() {
   }
 
   const rows = paid.map((p, idx) => {
+    const cancelled = !!p.isCancelled;
     const amt    = Number(p.paymentAmount) || 0;
     const fmtAmt = amt ? amt.toLocaleString('ko-KR') + '원' : '—';
     const tp     = p.studentType || '';
@@ -3274,18 +3275,31 @@ function renderPayments() {
           border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap;
           color:${typeColor[tp]||'var(--text2)'};">${typeIcon[tp]||''} ${tp}</span>`
       : '—';
-    const memoTag = p.paymentMemo
-      ? `<span style="font-size:11px;background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:2px 7px;color:var(--text2);margin-left:4px;white-space:nowrap;">${p.paymentMemo}</span>`
+    const cancelBadge = cancelled
+      ? `<span style="font-size:11px;background:rgba(255,59,48,0.12);border:1px solid var(--danger);
+          border-radius:10px;padding:2px 7px;color:var(--danger);font-weight:700;margin-left:4px;
+          white-space:nowrap;">취소</span>`
       : '';
-    return `<tr>
+    const memoTag = p.paymentMemo
+      ? `<span style="font-size:11px;background:var(--surface);border:1px solid var(--border2);
+          border-radius:10px;padding:2px 7px;color:var(--text2);margin-left:4px;white-space:nowrap;">${p.paymentMemo}</span>`
+      : '';
+    const rowStyle = cancelled ? 'opacity:0.45;' : '';
+    const amtStyle = cancelled
+      ? 'text-decoration:line-through;color:var(--text3);white-space:nowrap;'
+      : 'color:var(--success);font-weight:700;white-space:nowrap;';
+    return `<tr style="${rowStyle}">
       <td style="white-space:nowrap;"><b>${p.studentName}</b></td>
       <td>${tBadge}</td>
       <td style="white-space:nowrap;">${p.teacher||'—'}</td>
       <td style="white-space:nowrap;">${p.packageType||'—'}</td>
       <td style="color:var(--primary);font-weight:700;">${p.totalSessions}회</td>
-      <td style="color:var(--success);font-weight:700;white-space:nowrap;">${fmtAmt}${memoTag}</td>
+      <td style="${amtStyle}">${fmtAmt}${memoTag}${cancelBadge}</td>
       <td style="color:var(--text2);white-space:nowrap;">${p.paymentDate||'—'}</td>
-      <td><button class="btn btn-danger btn-xs" onclick='openCancelPaymentModal("${p.studentName}",${p.rowIndex})'>취소</button></td>
+      <td>${cancelled
+        ? '<span style="font-size:11px;color:var(--text3);">취소됨</span>'
+        : `<button class="btn btn-danger btn-xs" onclick='openCancelPaymentModal("${p.studentName}",${p.rowIndex})'>취소</button>`
+      }</td>
     </tr>`;
   }).join('');
 
