@@ -3546,40 +3546,57 @@ function renderTeacherHistory() {
   // ── 학생별 출석 현황 (카드)
   const studentCards = studentNames.map(name => {
     const s = sdStudents().find(st => st.name === name);
-    const attList = myAtt.filter(a => a.studentName === name).sort((a,b)=>b.classDate.localeCompare(a.classDate));
-    const cnt = attList.length;
-    const absent = attList.filter(a => a.memo==='당일결석').length;
-    const lastDate2 = attList[0]?.classDate?.slice(0,10) || '—';
+    const total   = s?.totalSessions  || 0;   // 보유 회차
+    const used    = s?.usedSessions   || 0;   // 사용 횟수
     const payDate = s?.paymentDate ? s.paymentDate.slice(5).replace('-','/') : '—';
     const dotColor = s?.needPayment ? 'var(--danger)' : 'var(--success)';
 
-    // 최근 수업 체크박스 (최대 8개)
-    const recentChecks = attList.slice(0, 8).map(a => {
-      const isAbs = a.memo === '당일결석';
-      const dateLabel = a.classDate?.slice(5,10).replace('-','.') || '';
-      return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
-        <div style="width:22px;height:22px;border-radius:5px;border:2px solid ${isAbs?'var(--warning)':'var(--success)'};
-          background:${isAbs?'rgba(255,165,0,0.15)':'rgba(0,200,100,0.12)'};
-          display:flex;align-items:center;justify-content:center;font-size:12px;">
-          ${isAbs ? '⚠' : '✓'}
-        </div>
-        <div style="font-size:9px;color:var(--text3);">${dateLabel}</div>
-      </div>`;
-    }).join('');
+    // 보유 회차만큼 박스, 사용 횟수만큼 체크
+    // 사용 내역 중 결석 여부 파악 (최근 used개)
+    const attList = myAtt
+      .filter(a => a.studentName === name)
+      .sort((a,b) => a.classDate.localeCompare(b.classDate));
 
-    return `<div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:14px 16px;margin-bottom:8px;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <div style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0;"></div>
-        <div style="font-size:15px;font-weight:800;flex:1;">${name}</div>
-        <div style="font-size:12px;color:var(--text2);">수업 <b style="color:var(--primary);">${cnt}</b>회 · 최근 결제일 <b style="color:var(--accent);">${payDate}</b></div>
+    let boxes = '';
+    for (let i = 0; i < total; i++) {
+      if (i < used) {
+        const a = attList[i];
+        const isAbs = a?.memo === '당일결석';
+        const borderColor = isAbs ? 'var(--warning)' : 'var(--success)';
+        const bg          = isAbs ? 'rgba(255,165,0,0.18)' : 'rgba(0,200,100,0.15)';
+        const icon        = isAbs ? '⚠' : '✓';
+        const iconColor   = isAbs ? 'var(--warning)' : 'var(--success)';
+        boxes += `<div style="width:20px;height:20px;border-radius:4px;border:2px solid ${borderColor};
+          background:${bg};display:flex;align-items:center;justify-content:center;
+          font-size:11px;color:${iconColor};font-weight:900;">${icon}</div>`;
+      } else {
+        // 미사용 빈 박스
+        boxes += `<div style="width:20px;height:20px;border-radius:4px;
+          border:2px solid var(--border2);background:transparent;"></div>`;
+      }
+    }
+    // 보유 회차 0이면 안내 표시
+    if (total === 0) {
+      boxes = `<span style="font-size:11px;color:var(--text3);">수강권 없음</span>`;
+    }
+
+    return `<div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:12px 14px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <div style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;"></div>
+        <div style="font-size:14px;font-weight:800;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${name}</div>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">${recentChecks}</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:7px;">
+        <b style="color:var(--primary);">${used}</b>/<b>${total}</b>회 · 결제일 <b style="color:var(--accent);">${payDate}</b>
+      </div>
+      <div style="display:flex;gap:3px;flex-wrap:wrap;">${boxes}</div>
     </div>`;
   }).join('');
 
   document.getElementById('teacher-attendance-wrap').innerHTML = calHtml + `
     <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px;">👨‍🎓 학생별 수업 현황</div>
-    ${studentCards}`;
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      ${studentCards}
+    </div>`;
 }
 
 // 날짜 클릭 시 상세 보기
