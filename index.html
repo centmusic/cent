@@ -4204,7 +4204,10 @@ function deselectAllNeedPay() {
 function showNoticeIfAny() {
   const myName = state.currentTeacher;
   const notices = sdMemos()
-    .filter(m => m.teacherTarget === '전체공지' || m.teacherTarget === myName)
+    .filter(m =>
+      (m.teacherTarget === '전체공지' || m.teacherTarget === myName) &&
+      m.author !== '공지확인' // 확인 기록 메모는 공지로 인식하지 않음
+    )
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
   if (notices.length === 0) return;
@@ -4231,10 +4234,10 @@ function showNoticeIfAny() {
 
 function closeNotice() {
   const overlay = document.getElementById('notice-overlay');
-  const noticeId  = overlay.dataset.noticeId;
+  const noticeId   = overlay.dataset.noticeId;
   const noticeName = overlay.dataset.noticeName;
 
-  // 영구 확인 기록 저장
+  // 영구 확인 기록 저장 (localStorage)
   if (noticeId && noticeName) {
     const storageKey = 'notice_confirmed_' + noticeName;
     const confirmed = (localStorage.getItem(storageKey) || '').split(',').filter(Boolean);
@@ -4243,22 +4246,7 @@ function closeNotice() {
   }
 
   overlay.style.display = 'none';
-
-  // 확인한 공지를 선생님 메모에 자동 저장
-  if (noticeId && noticeName) {
-    const notice = sdMemos().find(m => String(m.rowIndex) === noticeId);
-    if (notice) {
-      const memoContent = `[공지 확인] ${notice.content}`;
-      callAPI('addMemo', {
-        teacherTarget: noticeName,
-        author: '공지확인',
-        content: memoContent
-      }).catch(() => {}); // 실패해도 조용히 무시
-    }
-  }
-
-  // 다음 확인 안 한 공지가 있으면 연속 표시
-  setTimeout(showNoticeIfAny, 300);
+  // ※ 메모 자동 저장 제거 — 저장된 메모가 새 공지로 인식되어 무한루프 발생하던 버그 수정
 }
 
 
