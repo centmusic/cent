@@ -1898,6 +1898,7 @@ const state = {
   salaryMonth: new Date(),
   statsMonth: new Date(),
   paymentsMonth: new Date(),
+  smsHistPage: 1,
   teacherMonth: new Date(),
 };
 
@@ -3466,35 +3467,143 @@ function renderTeacherHistory() {
 
   const myAtt = sdAttendance().filter(a => a.teacherName === teacherName && a.classDate && a.classDate.startsWith(ym));
   const total = myAtt.length;
-  const students = [...new Set(myAtt.map(a => a.studentName))];
+  const absentCount = myAtt.filter(a => a.memo === '당일결석').length;
+  const studentNames = [...new Set(myAtt.map(a => a.studentName))];
 
   document.getElementById('teacher-stats-wrap').innerHTML = `
     <div class="stats-grid">
       <div class="stat-card primary"><div class="stat-label">이번달 수업</div><div class="stat-value">${total}회</div></div>
-      <div class="stat-card accent"><div class="stat-label">담당 학생</div><div class="stat-value">${students.length}명</div></div>
+      <div class="stat-card accent"><div class="stat-label">담당 학생</div><div class="stat-value">${studentNames.length}명</div></div>
+      <div class="stat-card warning"><div class="stat-label">당일결석</div><div class="stat-value">${absentCount}회</div></div>
     </div>`;
 
   if (myAtt.length === 0) {
-    document.getElementById('teacher-attendance-wrap').innerHTML = `<div class="empty-state"><div class="empty-state-icon">📊</div><div class="empty-state-text">이번달 수업 기록이 없습니다</div></div>`;
+    document.getElementById('teacher-attendance-wrap').innerHTML =
+      '<div class="empty-state"><div class="empty-state-icon">📊</div><div class="empty-state-text">이번달 수업 기록이 없습니다</div></div>';
     return;
   }
 
-  const sorted = [...myAtt].sort((a,b) => b.classDate.localeCompare(a.classDate));
-  const items = sorted.map(a => {
-    const isAbsent = a.memo === '당일결석';
-    const dotColor = isAbsent ? 'var(--warning)' : 'var(--success)';
-    const label = isAbsent ? ' <span style="font-size:11px;color:var(--warning);font-weight:700;">[결석]</span>' : '';
-    return `<div class="attendance-item">
-      <div class="attendance-dot" style="background:${dotColor}"></div>
-      <div class="attendance-date">${a.classDate}</div>
-      <div class="attendance-student">${a.studentName}${label}</div>
+  // ── 달력 렌더링
+  const year = d.getFullYear();
+  const month = d.getMonth(); // 0-based
+  const firstDay = new Date(year, month, 1).getDay(); // 0=일
+  const lastDate = new Date(year, month + 1, 0).getDate();
+
+  // 날짜별 수업 기록 맵
+  const dayMap = {};
+  myAtt.forEach(a => {
+    const dateStr = a.classDate.slice(0, 10); // yyyy-MM-dd
+    const day = parseInt(dateStr.slice(8, 10));
+    if (!dayMap[day]) dayMap[day] = [];
+    dayMap[day].push(a);
+  });
+
+  const dayLabels = ['일','월','화','수','목','금','토'];
+  let calHtml = `
+    <div style="background:var(--card);border:1px solid var(--border2);border-radius:14px;padding:16px;margin-bottom:16px;">
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:6px;">
+        ${dayLabels.map((l,i) => `<div style="text-align:center;font-size:11px;font-weight:700;color:${i===0?'var(--danger)':i===6?'var(--primary)':'var(--text2)'};">${l}</div>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">`;
+
+  // 빈 칸 채우기
+  for (let i = 0; i < firstDay; i++) {
+    calHtml += `<div></div>`;
+  }
+
+  for (let day = 1; day <= lastDate; day++) {
+    const records = dayMap[day] || [];
+    const hasClass = records.length > 0;
+    const hasAbsent = records.some(r => r.memo === '당일결석');
+    const isToday = new Date().getDate() === day && new Date().getMonth() === month && new Date().getFullYear() === year;
+    const dayOfWeek = new Date(year, month, day).getDay();
+
+    let dotHtml = '';
+    if (hasClass) {
+      const color = hasAbsent ? 'var(--warning)' : 'var(--success)';
+      dotHtml = `<div style="width:6px;height:6px;border-radius:50%;background:${color};margin:1px auto 0;"></div>`;
+    }
+
+    const textColor = dayOfWeek === 0 ? 'var(--danger)' : dayOfWeek === 6 ? 'var(--primary)' : 'var(--text)';
+    const bg = isToday
+      ? 'background:var(--primary);border-radius:8px;'
+      : hasClass ? 'background:rgba(255,255,255,0.04);border-radius:8px;' : '';
+    const todayColor = isToday ? '#fff' : textColor;
+
+    // 툴팁: 수업 학생 목록
+    const title = hasClass ? records.map(r => r.studentName + (r.memo==='당일결석'?' [결석]':'')).join(', ') : '';
+
+    calHtml += `<div style="text-align:center;padding:4px 2px;cursor:${hasClass?'pointer':'default'};${bg}"
+      ${hasClass ? `onclick="showDayDetail(${day}, '${ym}')"` : ''}
+      title="${title}">
+      <div style="font-size:12px;font-weight:${hasClass||isToday?'800':'500'};color:${todayColor};">${day}</div>
+      ${dotHtml}
+    </div>`;
+  }
+
+  calHtml += `</div></div>`;
+
+  // ── 학생별 출석 현황 (카드)
+  const studentCards = studentNames.map(name => {
+    const s = sdStudents().find(st => st.name === name);
+    const attList = myAtt.filter(a => a.studentName === name).sort((a,b)=>b.classDate.localeCompare(a.classDate));
+    const cnt = attList.length;
+    const absent = attList.filter(a => a.memo==='당일결석').length;
+    const lastDate2 = attList[0]?.classDate?.slice(0,10) || '—';
+    const payDate = s?.paymentDate ? s.paymentDate.slice(5).replace('-','/') : '—';
+    const dotColor = s?.needPayment ? 'var(--danger)' : 'var(--success)';
+
+    // 최근 수업 체크박스 (최대 8개)
+    const recentChecks = attList.slice(0, 8).map(a => {
+      const isAbs = a.memo === '당일결석';
+      const dateLabel = a.classDate?.slice(5,10).replace('-','.') || '';
+      return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+        <div style="width:22px;height:22px;border-radius:5px;border:2px solid ${isAbs?'var(--warning)':'var(--success)'};
+          background:${isAbs?'rgba(255,165,0,0.15)':'rgba(0,200,100,0.12)'};
+          display:flex;align-items:center;justify-content:center;font-size:12px;">
+          ${isAbs ? '⚠' : '✓'}
+        </div>
+        <div style="font-size:9px;color:var(--text3);">${dateLabel}</div>
+      </div>`;
+    }).join('');
+
+    return `<div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:14px 16px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <div style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0;"></div>
+        <div style="font-size:15px;font-weight:800;flex:1;">${name}</div>
+        <div style="font-size:12px;color:var(--text2);">수업 <b style="color:var(--primary);">${cnt}</b>회 · 최근 결제일 <b style="color:var(--accent);">${payDate}</b></div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">${recentChecks}</div>
     </div>`;
   }).join('');
-  document.getElementById('teacher-attendance-wrap').innerHTML = `
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:18px 20px;">
-      <div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text2);">수업 기록</div>
-      ${items}
+
+  document.getElementById('teacher-attendance-wrap').innerHTML = calHtml + `
+    <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px;">👨‍🎓 학생별 수업 현황</div>
+    ${studentCards}`;
+}
+
+// 날짜 클릭 시 상세 보기
+function showDayDetail(day, ym) {
+  const teacherName = state.currentTeacher;
+  const dateStr = `${ym}-${String(day).padStart(2,'0')}`;
+  const records = sdAttendance().filter(a =>
+    a.teacherName === teacherName && a.classDate && a.classDate.startsWith(dateStr)
+  );
+  if (records.length === 0) return;
+  const items = records.map(r => {
+    const isAbs = r.memo === '당일결석';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:16px;">${isAbs ? '⚠️' : '✅'}</span>
+      <div>
+        <div style="font-weight:700;">${r.studentName}</div>
+        <div style="font-size:12px;color:var(--text2);">${r.classDate} ${isAbs?'[당일결석]':''}</div>
+      </div>
     </div>`;
+  }).join('');
+  document.getElementById('modal-title').textContent = `📅 ${ym.replace('-','년 ')}월 ${day}일 수업`;
+  document.getElementById('modal-body').innerHTML = items;
+  document.getElementById('modal-footer').innerHTML = `<button class="btn btn-secondary" onclick="closeModal()">닫기</button>`;
+  openModal();
 }
 
 // ============================================================
@@ -3578,26 +3687,38 @@ function _renderTimetableFor(teacherName, containerId, editable) {
       hourRows += `<div class="tt-hour-row${isToday?' today-bg':''}" ${clickAttr}></div>`;
     }
 
-    // 수업 블록
-    let blocks = '';
+    // 수업 블록 — 같은 시간대(startTime+endTime 동일)끼리 그룹핑
+    const PX_PER_MIN = PX_PER_HOUR / 60; // 1분 = 1px
+    const groups = {};
     daySlots.forEach(slot => {
-      const startMin = timeToMin_(slot.startTime) - minHour * 60;
-      // endTime 없으면 30분으로 기본값
-      const rawEnd   = slot.endTime || '';
+      const key = `${slot.startTime}|${slot.endTime || ''}`;
+      if (!groups[key]) groups[key] = { startTime: slot.startTime, endTime: slot.endTime, slots: [] };
+      groups[key].slots.push(slot);
+    });
+
+    let blocks = '';
+    Object.values(groups).forEach(group => {
+      const startMin = timeToMin_(group.startTime) - minHour * 60;
+      const rawEnd   = group.endTime || '';
       const endMin   = rawEnd ? (timeToMin_(rawEnd) - minHour * 60) : (startMin + 30);
-      const topPx    = Math.max(0, (startMin / 60) * PX_PER_HOUR);
-      const heightPx = Math.max(24, ((endMin - startMin) / 60) * PX_PER_HOUR - 2);
-      const bgColor  = getStudentColor_(slot.linkedStudent || '수업');
+      const durationMin = endMin - startMin;
+      const topPx    = Math.max(0, startMin * PX_PER_MIN);
+      // 10분 단위 높이 (최소 24px)
+      const heightPx = Math.max(24, Math.round(durationMin * PX_PER_MIN) - 2);
+      // 그룹 색상: 첫 번째 슬롯의 학생 이름 기반
+      const bgColor  = getStudentColor_(group.slots[0].linkedStudent || '수업');
       const txtColor = getContrastColor_(bgColor);
-      const label    = slot.linkedStudent || '수업';
-      const timeStr  = `${slot.startTime}~${slot.endTime}`;
+      const timeStr  = `${group.startTime}~${group.endTime||''}`;
+      // 이름 목록
+      const names = group.slots.map(s => s.linkedStudent || '수업').join(' · ');
+      // 클릭 시 첫 번째 슬롯 기준으로 모달 오픈
       const clickAttr = editable
-        ? `onclick='openTimetableSlotModal("${teacherName}","${day}","${slot.startTime}",${JSON.stringify(slot)})'`
+        ? `onclick='openTimetableSlotModal("${teacherName}","${day}","${group.startTime}",${JSON.stringify(group.slots[0])})'`
         : '';
       blocks += `<div class="tt-block" ${clickAttr}
         style="top:${36 + topPx}px;height:${heightPx}px;background:${bgColor};color:${txtColor};">
-        <div style="font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</div>
-        ${heightPx > 28 ? `<div style="font-size:9px;opacity:0.85;margin-top:1px;">${timeStr}</div>` : ''}
+        <div style="font-weight:800;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${names}</div>
+        ${heightPx > 26 ? `<div style="font-size:9px;opacity:0.8;margin-top:1px;">${timeStr}</div>` : ''}
       </div>`;
     });
 
@@ -3962,19 +4083,49 @@ function _renderOverdue(list) {
     </div>`;
 }
 
+// 발송이력 전체 목록 (페이지네이션용)
+let _smsHistoryAll = [];
+
 function _renderHistory(list) {
+  _smsHistoryAll = list;
+  state.smsHistPage = 1;
+  _renderHistoryPage();
+}
+
+function _renderHistoryPage() {
   const wrap = document.getElementById('sms-history-wrap');
   if (!wrap) return;
+  const list = _smsHistoryAll;
   if (list.length === 0) {
     wrap.innerHTML = '<div class="empty-state" style="padding:30px;"><div class="empty-state-icon">📭</div><div class="empty-state-text">발송 이력이 없습니다</div></div>';
     return;
   }
+  const PAGE_SIZE = 20;
+  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  const page = Math.min(Math.max(1, state.smsHistPage), totalPages);
+  const paged = list.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+
+  // 페이지 버튼
+  let pageBtns = '';
+  if (totalPages > 1) {
+    pageBtns = `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:12px;justify-content:center;">`;
+    if (page > 1) pageBtns += `<button class="btn btn-secondary btn-xs" onclick="setSmsHistPage(${page-1})">‹ 이전</button>`;
+    for (let i = 1; i <= totalPages; i++) {
+      pageBtns += `<button class="btn btn-xs ${i===page?'btn-primary':'btn-secondary'}" onclick="setSmsHistPage(${i})">${i}</button>`;
+    }
+    if (page < totalPages) pageBtns += `<button class="btn btn-secondary btn-xs" onclick="setSmsHistPage(${page+1})">다음 ›</button>`;
+    pageBtns += `</div>`;
+  }
+
   wrap.innerHTML = `
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">
+      전체 ${list.length}건 · ${page}/${totalPages} 페이지
+    </div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>발송일시</th><th>학생</th><th>수신번호</th><th>결과</th><th>내용</th></tr></thead>
         <tbody>
-          ${list.slice(0, 50).map(h => `<tr>
+          ${paged.map(h => `<tr>
             <td style="white-space:nowrap;">${h.date}</td>
             <td><b>${h.studentName}</b></td>
             <td>${h.receiver}</td>
@@ -3983,7 +4134,14 @@ function _renderHistory(list) {
           </tr>`).join('')}
         </tbody>
       </table>
-    </div>`;
+    </div>
+    ${pageBtns}`;
+}
+
+function setSmsHistPage(p) {
+  state.smsHistPage = p;
+  _renderHistoryPage();
+  document.getElementById('sms-history-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ── 글자수 + SMS/LMS 구분
