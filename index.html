@@ -3395,7 +3395,37 @@ function renderTodayClasses() {
   // 다른 날 수업 학생
   const otherCards = extraStudents.map(makeCard).join('');
 
-  let html = '';
+  // ── 일괄 출결 바
+  const batchBar = allStudents.length > 0 ? `
+    <div id="batch-bar" style="background:var(--card);border:1.5px solid var(--border2);border-radius:12px;
+      padding:12px 14px;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:800;color:var(--text2);margin-bottom:10px;">
+        📋 일괄 출결 — 수업한 학생 선택 후 한번에 처리
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+        ${allStudents.map(({ name }) => {
+          const checked = todayAttendance.includes(name);
+          return `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;
+            background:${checked?'rgba(0,200,100,0.1)':'var(--surface)'};
+            border:1.5px solid ${checked?'var(--success)':'var(--border2)'};
+            border-radius:20px;padding:5px 12px;font-size:13px;font-weight:700;transition:all 0.15s;">
+            <input type="checkbox" class="batch-chk" value="${name}"
+              ${checked?'checked':''} style="accent-color:var(--success);">
+            ${name}${checked?' ✓':''}
+          </label>`;
+        }).join('')}
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <input type="date" id="batch-date" value="${todayStr_()}"
+          class="form-control" style="max-width:160px;font-size:13px;">
+        <button class="btn btn-primary btn-sm" onclick="doBatchAttendance()">
+          ✅ 선택한 학생 일괄 출결
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="toggleBatchAll()">전체선택</button>
+      </div>
+    </div>` : '';
+
+  let html = batchBar;
   if (todayCards) {
     html += `<div class="section-divider" style="color:var(--accent);">
       <span style="width:9px;height:9px;border-radius:50%;background:var(--accent);display:inline-block;flex-shrink:0;"></span>
@@ -3412,6 +3442,50 @@ function renderTodayClasses() {
   document.getElementById('today-classes-wrap').innerHTML = html;
 }
 
+// 일괄 출결 전체선택 토글
+function toggleBatchAll() {
+  const chks = document.querySelectorAll('.batch-chk');
+  const allChecked = Array.from(chks).every(c => c.checked);
+  chks.forEach(c => { c.checked = !allChecked; });
+}
+
+// 일괄 출결 실행
+function doBatchAttendance() {
+  const chks = Array.from(document.querySelectorAll('.batch-chk:checked'));
+  if (chks.length === 0) { showToast('출결할 학생을 선택하세요', 'warning'); return; }
+  const dateVal   = document.getElementById('batch-date')?.value || todayStr_();
+  const classDate = dateVal + 'T09:00:00';
+  const students  = chks.map(c => ({ studentName: c.value, memo: '' }));
+
+  if (!confirm(`${students.length}명을 ${dateVal} 날짜로 일괄 출결 처리할까요?`)) return;
+  showLoading(true);
+  callAPI('checkAttendanceBatch', {
+    students,
+    teacherName: state.currentTeacher,
+    classDate
+  }).then(r => {
+    showLoading(false);
+    if (r.success) {
+      showToast(r.message, 'success');
+      // 로컬 상태 업데이트
+      (r.results || []).forEach(res => {
+        if (res.success) {
+          _updateStudentLocal(res.studentName, {
+            usedSessions: res.used, totalSessions: res.total,
+            remaining: res.remaining, needPayment: res.needPayment
+          });
+          state.data.attendance.push({
+            studentName: res.studentName,
+            teacherName: state.currentTeacher,
+            classDate, memo: ''
+          });
+        }
+      });
+      renderTodayClasses();
+    } else showToast(r.error || '일괄 출결 실패', 'error');
+  }).catch(onError);
+}
+
 
 // ── 출결 후 로컬 학생 데이터 업데이트 (전체 재로딩 방지)
 function _updateStudentLocal(studentName, updates) {
@@ -3422,18 +3496,69 @@ function _updateStudentLocal(studentName, updates) {
   if (updates.remaining     !== undefined) s.remaining     = updates.remaining;
   if (updates.needPayment   !== undefined) s.needPayment   = updates.needPayment;
 }
+// 오늘 날짜를 yyyy-MM-dd 형식으로 반환
+function todayStr_() {
+  const n = new Date();
+  return n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0') + '-' + String(n.getDate()).padStart(2,'0');
+}
+
 function doCheckAttendance(studentName) {
-  if (!confirm(`"${studentName}" 학생의 출결을 체크하시겠습니까?`)) return;
+  // 날짜 선택 모달
+  document.getElementById('modal-title').textContent = `✅ 출결 — ${studentName}`;
+  document.getElementById('modal-body').innerHTML = `
+    <div class="form-group">
+      <label class="form-label">수업 날짜</label>
+      <input class="form-control" id="att-date" type="date" value="${todayStr_()}"
+        style="font-size:16px;font-weight:700;">
+      <div style="font-size:12px;color:var(--text2);margin-top:6px;">
+        실수로 날짜가 틀렸을 경우 수정하세요. 기본값은 오늘입니다.
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">메모 (선택)</label>
+      <input class="form-control" id="att-memo" placeholder="메모 (선택사항)">
+    </div>`;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeModal()">취소</button>
+    <button class="btn btn-primary" onclick="_submitCheckAttendance('${studentName}','normal')">✅ 출결 완료</button>`;
+  openModal();
+}
+
+function doMarkAbsent(studentName) {
+  document.getElementById('modal-title').textContent = `⚠️ 당일결석 — ${studentName}`;
+  document.getElementById('modal-body').innerHTML = `
+    <div class="info-box" style="margin-bottom:12px;">수강 횟수 1회 차감됩니다.</div>
+    <div class="form-group">
+      <label class="form-label">결석 날짜</label>
+      <input class="form-control" id="att-date" type="date" value="${todayStr_()}"
+        style="font-size:16px;font-weight:700;">
+    </div>
+    <div class="form-group">
+      <label class="form-label">메모 (선택)</label>
+      <input class="form-control" id="att-memo" placeholder="결석 사유 등">
+    </div>`;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeModal()">취소</button>
+    <button class="btn btn-warning" onclick="_submitCheckAttendance('${studentName}','absent')">⚠️ 당일결석 처리</button>`;
+  openModal();
+}
+
+function _submitCheckAttendance(studentName, type) {
+  const dateVal = document.getElementById('att-date')?.value || todayStr_();
+  const memo    = type === 'absent' ? '당일결석' : (document.getElementById('att-memo')?.value || '');
+  const classDate = dateVal + 'T09:00:00'; // 날짜만 있으면 오전 9시로 고정
+  closeModal();
   showLoading(true);
-  callAPI('checkAttendance', { studentName, teacherName: state.currentTeacher })
+  callAPI('checkAttendance', { studentName, teacherName: state.currentTeacher, memo, classDate })
     .then(r => {
       showLoading(false);
       if (r.success) {
-        showToast(r.message, r.needPayment ? 'warning' : 'success');
-        // 로컬 데이터만 업데이트 (전체 재로딩 없음)
+        const msg = type === 'absent'
+          ? `⚠️ ${studentName} 당일결석 (${r.used}/${r.total})`
+          : r.message;
+        showToast(msg, r.needPayment ? 'warning' : (type === 'absent' ? 'warning' : 'success'));
         _updateStudentLocal(studentName, { usedSessions: r.used, totalSessions: r.total, remaining: r.remaining, needPayment: r.needPayment });
-        // 출결 기록도 로컬에 추가
-        state.data.attendance.push({ studentName, teacherName: state.currentTeacher, classDate: new Date().toISOString(), memo: '' });
+        state.data.attendance.push({ studentName, teacherName: state.currentTeacher, classDate: classDate, memo });
         renderTodayClasses();
       } else showToast(r.error, 'error');
     }).catch(onError);
@@ -3460,20 +3585,7 @@ function doCancelAttendance(studentName) {
     }).catch(onError);
 }
 
-function doMarkAbsent(studentName) {
-  if (!confirm(`"${studentName}" 학생을 당일결석 처리하시겠습니까?\n수강 횟수가 1회 차감됩니다.`)) return;
-  showLoading(true);
-  callAPI('checkAttendance', { studentName, teacherName: state.currentTeacher, memo: '당일결석' })
-    .then(r => {
-      showLoading(false);
-      if (r.success) {
-        showToast(`⚠️ ${studentName} 당일결석 처리 완료 (${r.used}/${r.total})`, 'warning');
-        _updateStudentLocal(studentName, { usedSessions: r.used, totalSessions: r.total, remaining: r.remaining, needPayment: r.needPayment });
-        state.data.attendance.push({ studentName, teacherName: state.currentTeacher, classDate: new Date().toISOString(), memo: '당일결석' });
-        renderTodayClasses();
-      } else showToast(r.error, 'error');
-    }).catch(onError);
-}
+
 
 function changeTeacherMonth(delta) {
   state.teacherMonth = new Date(state.teacherMonth.getFullYear(), state.teacherMonth.getMonth() + delta, 1);
@@ -3587,13 +3699,24 @@ function renderTeacherHistory() {
         const bg          = isAbs ? 'rgba(255,165,0,0.18)' : 'rgba(0,200,100,0.15)';
         const icon        = isAbs ? '⚠' : '✓';
         const iconColor   = isAbs ? 'var(--warning)' : 'var(--success)';
-        boxes += `<div style="width:20px;height:20px;border-radius:4px;border:2px solid ${borderColor};
-          background:${bg};display:flex;align-items:center;justify-content:center;
-          font-size:11px;color:${iconColor};font-weight:900;">${icon}</div>`;
+        // 날짜: classDate에서 월/일 추출 (예: 3/21)
+        const rawDate  = a?.classDate || '';
+        const dateLabel = rawDate
+          ? (parseInt(rawDate.slice(5,7)) + '/' + parseInt(rawDate.slice(8,10)))
+          : '';
+        boxes += `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">
+          <div style="width:22px;height:22px;border-radius:4px;border:2px solid ${borderColor};
+            background:${bg};display:flex;align-items:center;justify-content:center;
+            font-size:11px;color:${iconColor};font-weight:900;">${icon}</div>
+          <div style="font-size:9px;color:var(--text3);white-space:nowrap;line-height:1.2;">${dateLabel}</div>
+        </div>`;
       } else {
-        // 미사용 빈 박스
-        boxes += `<div style="width:20px;height:20px;border-radius:4px;
-          border:2px solid var(--border2);background:transparent;"></div>`;
+        // 미사용 빈 박스 (날짜 자리 유지로 정렬 일치)
+        boxes += `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">
+          <div style="width:22px;height:22px;border-radius:4px;
+            border:2px solid var(--border2);background:transparent;"></div>
+          <div style="font-size:9px;color:transparent;line-height:1.2;">-</div>
+        </div>`;
       }
     }
     // 보유 회차 0이면 안내 표시
