@@ -1340,6 +1340,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     <button class="tab-btn" onclick="showAdminTab('salary')" id="tab-salary">💰 급여 정산</button>
     <button class="tab-btn" onclick="showAdminTab('payments')" id="tab-payments">💳 결제 관리</button>
     <button class="tab-btn" onclick="showAdminTab('sms')" id="tab-sms">📱 문자 발송</button>
+    <button class="tab-btn" onclick="showAdminTab('attlog')" id="tab-attlog">📋 출석 관리</button>
   </div>
 
   <!-- TAB: 학생 관리 -->
@@ -1601,6 +1602,35 @@ input[type="date"]::-webkit-calendar-picker-indicator {
         </div>
       </div>
 
+    </div>
+  </div>
+
+
+  <!-- TAB: 출석 관리 -->
+  <div class="tab-panel" id="panel-attlog">
+    <div class="page-content">
+      <div class="section-header">
+        <div>
+          <div class="section-title">📋 출석 관리</div>
+          <div class="section-subtitle">선생님별 출결 로그 — 컴플레인 대응용</div>
+        </div>
+      </div>
+      <!-- 필터 -->
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
+        <select class="form-control" id="attlog-teacher-filter" onchange="renderAttLog()"
+          style="max-width:160px;">
+          <option value="">전체 선생님</option>
+        </select>
+        <input type="date" id="attlog-date-from" class="form-control" style="max-width:150px;"
+          onchange="renderAttLog()">
+        <span style="color:var(--text2);font-size:13px;">~</span>
+        <input type="date" id="attlog-date-to" class="form-control" style="max-width:150px;"
+          onchange="renderAttLog()">
+        <button class="btn btn-secondary btn-sm" onclick="resetAttLogFilter()">초기화</button>
+      </div>
+      <div id="attlog-content">
+        <div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">데이터를 불러오는 중...</div></div>
+      </div>
     </div>
   </div>
 
@@ -1979,6 +2009,7 @@ function onDataLoaded(data) {
     else if (state.adminTab === 'salary') renderSalary();
     else if (state.adminTab === 'payments') renderPayments();
     else if (state.adminTab === 'sms') renderSMSTab();
+    else if (state.adminTab === 'attlog') renderAttLog();
     else if (state.adminTab === 'stats') renderStats();
   } else if (state.currentScreen === 'teacher') {
     if (state.teacherTab === 'today') renderTodayClasses();
@@ -2054,6 +2085,7 @@ function showAdminTab(tab) {
   else if (tab === 'salary') renderSalary();
   else if (tab === 'payments') renderPayments();
   else if (tab === 'sms') renderSMSTab();
+  else if (tab === 'attlog') renderAttLog();
 }
 
 function showTeacherTab(tab) {
@@ -2530,6 +2562,11 @@ function openPaymentModal(studentName) {
         <option value="카드">💳 카드</option>
         <option value="카카오페이">📱 카카오페이</option>
       </select></div>
+    <div class="form-group"><label class="form-label">결제 날짜</label>
+      <input class="form-control" id="pay-date" type="date" value="${todayStr_()}"
+        style="font-size:15px;">
+      <div style="font-size:11px;color:var(--text2);margin-top:4px;">다음날 입력 시 실제 결제일로 수정하세요</div>
+    </div>
   `;
   document.getElementById('modal-footer').innerHTML = `
     <button class="btn btn-secondary" onclick="closeModal()">취소</button>
@@ -2551,7 +2588,8 @@ function processPayment(studentName) {
     packageType: document.getElementById('pay-package').value,
     totalSessions: document.getElementById('pay-total').value,
     paymentAmount,
-    paymentMemo: document.getElementById('pay-memo')?.value || ''
+    paymentMemo: document.getElementById('pay-memo')?.value || '',
+    paymentDate: document.getElementById('pay-date')?.value || ''
   };
   closeModal(); showLoading(true);
   callAPI('addPayment', d)
@@ -3325,9 +3363,13 @@ function renderTodayClasses() {
   const todayStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
   document.getElementById('today-date-label').textContent = `${now.getFullYear()}년 ${now.getMonth()+1}월 ${now.getDate()}일 (${todayKr}요일)`;
 
-  // 오늘 출결 체크한 학생 목록 (중복 포함)
+  // 담당 학생 이름 목록
+  const myStudentNames = new Set(
+    sdStudents().filter(s => s.teacher === teacherName && s.status === '등록').map(s => s.name)
+  );
+  // 오늘 출결 체크한 학생 목록 — 담당 학생 기준 (누가 체크했든 상관없이)
   const todayAttendance = sdAttendance()
-    .filter(a => a.teacherName === teacherName && a.classDate && a.classDate.startsWith(todayStr))
+    .filter(a => myStudentNames.has(a.studentName) && a.classDate && a.classDate.startsWith(todayStr))
     .map(a => a.studentName);
 
   // 오늘 시간표의 학생들
@@ -3576,8 +3618,12 @@ function doCancelAttendance(studentName) {
         // 마지막 출결 기록 로컬 제거
         const attList = state.data.attendance;
         for (let i = attList.length - 1; i >= 0; i--) {
-          if (attList[i].studentName === studentName && attList[i].memo !== '당일결석') {
-            attList.splice(i, 1); break;
+          if (attList[i].studentName === studentName &&
+              attList[i].memo !== '당일결석' &&
+              !(attList[i].memo||'').startsWith('[취소]')) {
+            // 삭제 대신 [취소] 메모 추가 (이력 보존)
+            attList[i].memo = '[취소] ' + new Date().toLocaleString('ko-KR');
+            break;
           }
         }
         renderTodayClasses();
@@ -3598,10 +3644,17 @@ function renderTeacherHistory() {
   const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   document.getElementById('teacher-month-label').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월`;
 
-  const myAtt = sdAttendance().filter(a => a.teacherName === teacherName && a.classDate && a.classDate.startsWith(ym));
+  // 담당 학생 기준으로 필터 (누가 체크했든 담당 학생이면 표시)
+  const myStudentSet = new Set(
+    sdStudents().filter(s => s.teacher === teacherName && s.status === '등록').map(s => s.name)
+  );
+  const myAtt = sdAttendance().filter(a =>
+    myStudentSet.has(a.studentName) && a.classDate && a.classDate.startsWith(ym)
+  );
   const total = myAtt.length;
   const absentCount = myAtt.filter(a => a.memo === '당일결석').length;
-  const studentNames = [...new Set(myAtt.map(a => a.studentName))];
+  // 담당 학생 목록은 등록 학생 기준으로 (출결 기록 없어도 카드 표시)
+  const studentNames = [...myStudentSet];
 
   document.getElementById('teacher-stats-wrap').innerHTML = `
     <div class="stats-grid">
@@ -3686,9 +3739,10 @@ function renderTeacherHistory() {
 
     // 보유 회차만큼 박스, 사용 횟수만큼 체크
     // 사용 내역 중 결석 여부 파악 (최근 used개)
-    const attList = myAtt
+    // 해당 학생의 전체 출결 기록 (이달 외 포함 — 체크박스 박스 수는 총 수강권 기준)
+    const attList = sdAttendance()
       .filter(a => a.studentName === name)
-      .sort((a,b) => a.classDate.localeCompare(b.classDate));
+      .sort((a,b) => (a.classDate||'').localeCompare(b.classDate||''));
 
     let boxes = '';
     for (let i = 0; i < total; i++) {
@@ -3931,7 +3985,8 @@ function showToast(msg, type = 'success') {
 // ============================================================
 function renderMyStudents() {
   const teacherName = state.currentTeacher;
-  const myStudents = sdStudents().filter(s => s.teacher === teacherName);
+  // 등록 + 상담 + 대기 학생만 표시 (퇴원 제외)
+  const myStudents = sdStudents().filter(s => s.teacher === teacherName && s.status !== '퇴원');
   const wrap = document.getElementById('my-students-wrap');
   if (!wrap) return;
 
@@ -4686,6 +4741,122 @@ function processCancelPayment(studentName, rowIndex) {
       else showToast(r.error || '취소 실패', 'error');
     }).catch(onError);
 }
+
+// ============================================================
+// 출석 관리 탭
+// ============================================================
+function renderAttLog() {
+  const wrap = document.getElementById('attlog-content');
+  if (!wrap) return;
+
+  // 필터값
+  const filterTeacher = document.getElementById('attlog-teacher-filter')?.value || '';
+  const dateFrom      = document.getElementById('attlog-date-from')?.value || '';
+  const dateTo        = document.getElementById('attlog-date-to')?.value || '';
+
+  // 선생님 드롭다운 채우기
+  const tSel = document.getElementById('attlog-teacher-filter');
+  if (tSel) {
+    const curVal = tSel.value;
+    tSel.innerHTML = '<option value="">전체 선생님</option>';
+    sdTeachers().forEach(t => {
+      tSel.innerHTML += `<option value="${t.name}" ${t.name===curVal?'selected':''}>${t.name}</option>`;
+    });
+    if (curVal) tSel.value = curVal;
+  }
+
+  // 출결 기록 필터링
+  let logs = sdAttendance().filter(a => {
+    if (!a.classDate) return false;
+    if (filterTeacher && a.teacherName !== filterTeacher) return false;
+    const d = a.classDate.slice(0,10);
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo   && d > dateTo)   return false;
+    return true;
+  }).sort((a,b) => (b.classDate||'').localeCompare(a.classDate||''));
+
+  if (logs.length === 0) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><div class="empty-state-text">출결 기록이 없습니다</div></div>';
+    return;
+  }
+
+  // 학생 정보 맵 (빠른 조회용)
+  const studentMap = {};
+  sdStudents().forEach(s => { studentMap[s.name] = s; });
+
+  // 선생님별 그룹핑
+  const teacherGroups = {};
+  logs.forEach(a => {
+    const t = a.teacherName || '(선생님 미지정)';
+    if (!teacherGroups[t]) teacherGroups[t] = [];
+    teacherGroups[t].push(a);
+  });
+
+  const DAY_KR = ['일','월','화','수','목','금','토'];
+
+  let html = '';
+  Object.entries(teacherGroups).forEach(([teacher, records]) => {
+    const rows = records.map(a => {
+      const s = studentMap[a.studentName] || {};
+      const isCancelled = (a.memo || '').startsWith('[취소]');
+      // 실제 체크한 시각 (classDate 전체)
+      const checkTime = a.classDate ? a.classDate.slice(0,16).replace('T',' ') : '—';
+      // 수업 날짜만 (앞 10자리)
+      const classDay  = a.classDate ? a.classDate.slice(0,10) : '—';
+      // 요일
+      const dayOfWeek = classDay !== '—'
+        ? DAY_KR[new Date(classDay).getDay()] + '요일'
+        : '—';
+      const remaining   = s.remaining   !== undefined ? s.remaining   : '—';
+      const total       = s.totalSessions || '—';
+      const payDate     = s.paymentDate  || '—';
+      const rowStyle    = isCancelled ? 'opacity:0.45;' : '';
+      const cancelBadge = isCancelled
+        ? `<span style="font-size:10px;color:var(--danger);border:1px solid var(--danger);border-radius:6px;padding:1px 5px;margin-left:4px;">취소</span>`
+        : '';
+      const absentBadge = a.memo === '당일결석'
+        ? `<span style="font-size:10px;color:var(--warning);border:1px solid var(--warning);border-radius:6px;padding:1px 5px;margin-left:4px;">결석</span>`
+        : '';
+      return `<tr style="${rowStyle}">
+        <td style="white-space:nowrap;">${a.studentName}${cancelBadge}${absentBadge}</td>
+        <td style="white-space:nowrap;color:var(--accent);">${classDay} (${dayOfWeek})</td>
+        <td style="white-space:nowrap;color:var(--text2);font-size:12px;">${checkTime}</td>
+        <td style="color:var(--primary);font-weight:700;">${remaining}/${total}회</td>
+        <td style="white-space:nowrap;color:var(--text2);">${payDate}</td>
+      </tr>`;
+    }).join('');
+
+    html += `
+      <div style="background:var(--card);border:1px solid var(--border2);border-radius:14px;
+        padding:16px 18px;margin-bottom:16px;">
+        <div style="font-size:15px;font-weight:800;margin-bottom:12px;">
+          👩‍🏫 ${teacher}
+          <span style="font-size:12px;font-weight:500;color:var(--text2);margin-left:8px;">${records.length}건</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>학생</th><th>수업일 (요일)</th><th>체크 시각</th><th>잔여/총횟수</th><th>최근 결제일</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  });
+
+  wrap.innerHTML = `<div style="font-size:12px;color:var(--text2);margin-bottom:12px;">총 ${logs.length}건</div>` + html;
+}
+
+function resetAttLogFilter() {
+  const tSel = document.getElementById('attlog-teacher-filter');
+  const from = document.getElementById('attlog-date-from');
+  const to   = document.getElementById('attlog-date-to');
+  if (tSel) tSel.value = '';
+  if (from) from.value = '';
+  if (to)   to.value   = '';
+  renderAttLog();
+}
+
 // ============================================================
 // LOADING
 // ============================================================
