@@ -1942,33 +1942,14 @@ window.onload = function () {
   state.paymentsMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   state.statsMonth    = new Date(now.getFullYear(), now.getMonth(), 1);
   state.teacherMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  warmupServer_(); // 서버 미리 깨우기
   loadData();
 };
 
-// 서버 워밍업 — 앱 최초 로딩 시 빈 핑으로 서버 미리 깨우기
-function warmupServer_() {
-  fetch(API_URL + '?ping=1').catch(() => {});
-}
-
-function loadData(isRetry) {
+function loadData() {
   showLoading(true);
-  if (!isRetry) {
-    document.getElementById('loading-text') &&
-      (document.getElementById('loading-text').textContent = '데이터 불러오는 중...');
-  } else {
-    document.getElementById('loading-text') &&
-      (document.getElementById('loading-text').textContent = '재시도 중...');
-  }
   callAPI('getAllData')
     .then(r => onDataLoaded(r))
-    .catch(e => {
-      if (!isRetry) {
-        setTimeout(() => loadData(true), 2500);
-      } else {
-        onError(e);
-      }
-    });
+    .catch(onError);
 }
 
 function onDataLoaded(data) {
