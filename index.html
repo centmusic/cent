@@ -1782,12 +1782,28 @@ function getSubjectBadge(subject, style) {
 const API_URL = 'https://script.google.com/macros/s/AKfycbyuootDk7Xp6NuaglJAgm0miV7jLzY8VZeHb4LWMBwJCkVy8si0k7ycruD2q9XEVtgSIg/exec';
 
 function callAPI(fn, params) {
-  return fetch(API_URL, {
+  // 타임아웃은 getAllData 전용 (결제/출결 등 변경 작업엔 적용 안 함)
+  const isReadOnly = (fn === 'getAllData' || fn === 'getSMSPageData' || fn === 'getTemplates');
+  const controller = isReadOnly ? new AbortController() : null;
+  const timeoutId  = isReadOnly ? setTimeout(() => controller.abort(), 30000) : null;
+
+  const fetchOpts = {
     method: 'POST',
     body: JSON.stringify({ fn, params: params !== undefined ? params : null }),
     headers: { 'Content-Type': 'text/plain' },
-    redirect: 'follow'
-  }).then(r => r.json());
+    redirect: 'follow',
+  };
+  if (controller) fetchOpts.signal = controller.signal;
+
+  return fetch(API_URL, fetchOpts)
+    .then(r => {
+      if (timeoutId) clearTimeout(timeoutId);
+      return r.json();
+    })
+    .catch(e => {
+      if (timeoutId) clearTimeout(timeoutId);
+      throw e;
+    });
 }
 
 // google.script.run 호환 래퍼 (기존 코드 일괄 대체용)
@@ -1942,14 +1958,35 @@ window.onload = function () {
   state.paymentsMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   state.statsMonth    = new Date(now.getFullYear(), now.getMonth(), 1);
   state.teacherMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  warmupServer_(); // 서버 미리 깨우기
   loadData();
 };
 
-function loadData() {
+// 서버 워밍업 — 앱 최초 로딩 시 빈 핑으로 서버 미리 깨우기
+function warmupServer_() {
+  fetch(API_URL + '?ping=1').catch(() => {});
+}
+
+function loadData(isRetry) {
   showLoading(true);
+  if (!isRetry) {
+    document.getElementById('loading-text') &&
+      (document.getElementById('loading-text').textContent = '데이터 불러오는 중...');
+  } else {
+    document.getElementById('loading-text') &&
+      (document.getElementById('loading-text').textContent = '재시도 중...');
+  }
   callAPI('getAllData')
     .then(r => onDataLoaded(r))
-    .catch(onError);
+    .catch(e => {
+      // getAllData 실패 시 1회 자동 재시도 (데이터 조회만 재시도, 변경 작업은 재시도 안 함)
+      if (!isRetry) {
+        showToast('연결이 불안정합니다. 재시도 중...', 'warning');
+        setTimeout(() => loadData(true), 2500);
+      } else {
+        onError(e);
+      }
+    });
 }
 
 function onDataLoaded(data) {
