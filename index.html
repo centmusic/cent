@@ -2468,11 +2468,11 @@ function openEditStudentModal(s) {
   `;
   document.getElementById('modal-footer').innerHTML = `
     <button class="btn btn-secondary" onclick="closeModal()">취소</button>
-    <button class="btn btn-primary" onclick="saveEditStudent(${s.rowIndex},'${s.createdAt}')">저장</button>`;
+    <button class="btn btn-primary" onclick="saveEditStudent(${s.rowIndex},'${s.createdAt}','${s.paymentDate||''}','${s.paymentAmount||''}','${s.paymentMemo||''}')">저장</button>`;
   openModal();
 }
 
-function saveEditStudent(rowIndex, createdAt) {
+function saveEditStudent(rowIndex, createdAt, paymentDate, paymentAmount, paymentMemo) {
   const name = document.getElementById('m-name').value.trim();
   if (!name) { showToast('이름을 입력하세요', 'warning'); return; }
   const d = {
@@ -2485,7 +2485,9 @@ function saveEditStudent(rowIndex, createdAt) {
     packageType: document.getElementById('m-package').value,
     totalSessions: document.getElementById('m-total').value,
     usedSessions: document.getElementById('m-used').value,
-    paymentDate: '',
+    paymentDate: paymentDate || '',    // 기존 결제일 유지
+    paymentAmount: paymentAmount || '', // 기존 결제금액 유지
+    paymentMemo: paymentMemo || '',     // 기존 결제수단 유지
     memo: document.getElementById('m-memo').value.trim(),
     school: document.getElementById('m-school').value.trim(),
     age: document.getElementById('m-age').value.trim(),
@@ -4795,6 +4797,17 @@ function renderAttLog() {
   const DAY_KR = ['일','월','화','수','목','금','토'];
 
   let html = '';
+  // 학생별 출결 기록을 날짜순으로 정렬해서 누적 횟수 계산
+  const studentAttMap = {};
+  sdAttendance()
+    .filter(a => !((a.memo||'').startsWith('[취소]')))
+    .sort((a,b) => (a.classDate||'').localeCompare(b.classDate||''))
+    .forEach(a => {
+      if (!studentAttMap[a.studentName]) studentAttMap[a.studentName] = 0;
+      studentAttMap[a.studentName]++;
+      a._cumUsed = studentAttMap[a.studentName]; // 해당 시점까지 누적 횟수
+    });
+
   Object.entries(teacherGroups).forEach(([teacher, records]) => {
     const rows = records.map(a => {
       const s = studentMap[a.studentName] || {};
@@ -4807,9 +4820,10 @@ function renderAttLog() {
       const dayOfWeek = classDay !== '—'
         ? DAY_KR[new Date(classDay).getDay()] + '요일'
         : '—';
-      const remaining   = s.remaining   !== undefined ? s.remaining   : '—';
-      const total       = s.totalSessions || '—';
-      const payDate     = s.paymentDate  || '—';
+      // 출결 당시 누적 횟수 표시 (컴플레인 대응용)
+      const cumUsed  = a._cumUsed || '—';
+      const total    = s.totalSessions || '—';
+      const payDate  = s.paymentDate  || '—';
       const rowStyle    = isCancelled ? 'opacity:0.45;' : '';
       const cancelBadge = isCancelled
         ? `<span style="font-size:10px;color:var(--danger);border:1px solid var(--danger);border-radius:6px;padding:1px 5px;margin-left:4px;">취소</span>`
@@ -4821,7 +4835,7 @@ function renderAttLog() {
         <td style="white-space:nowrap;">${a.studentName}${cancelBadge}${absentBadge}</td>
         <td style="white-space:nowrap;color:var(--accent);">${classDay} (${dayOfWeek})</td>
         <td style="white-space:nowrap;color:var(--text2);font-size:12px;">${checkTime}</td>
-        <td style="color:var(--primary);font-weight:700;">${remaining}/${total}회</td>
+        <td style="color:var(--primary);font-weight:700;">${cumUsed}/${total}회</td>
         <td style="white-space:nowrap;color:var(--text2);">${payDate}</td>
       </tr>`;
     }).join('');
