@@ -1782,28 +1782,12 @@ function getSubjectBadge(subject, style) {
 const API_URL = 'https://script.google.com/macros/s/AKfycbyuootDk7Xp6NuaglJAgm0miV7jLzY8VZeHb4LWMBwJCkVy8si0k7ycruD2q9XEVtgSIg/exec';
 
 function callAPI(fn, params) {
-  // 타임아웃은 getAllData 전용 (결제/출결 등 변경 작업엔 적용 안 함)
-  const isReadOnly = (fn === 'getAllData' || fn === 'getSMSPageData' || fn === 'getTemplates');
-  const controller = isReadOnly ? new AbortController() : null;
-  const timeoutId  = isReadOnly ? setTimeout(() => controller.abort(), 30000) : null;
-
-  const fetchOpts = {
+  return fetch(API_URL, {
     method: 'POST',
     body: JSON.stringify({ fn, params: params !== undefined ? params : null }),
     headers: { 'Content-Type': 'text/plain' },
-    redirect: 'follow',
-  };
-  if (controller) fetchOpts.signal = controller.signal;
-
-  return fetch(API_URL, fetchOpts)
-    .then(r => {
-      if (timeoutId) clearTimeout(timeoutId);
-      return r.json();
-    })
-    .catch(e => {
-      if (timeoutId) clearTimeout(timeoutId);
-      throw e;
-    });
+    redirect: 'follow'
+  }).then(r => r.json());
 }
 
 // google.script.run 호환 래퍼 (기존 코드 일괄 대체용)
@@ -1979,9 +1963,7 @@ function loadData(isRetry) {
   callAPI('getAllData')
     .then(r => onDataLoaded(r))
     .catch(e => {
-      // getAllData 실패 시 1회 자동 재시도 (데이터 조회만 재시도, 변경 작업은 재시도 안 함)
       if (!isRetry) {
-        showToast('연결이 불안정합니다. 재시도 중...', 'warning');
         setTimeout(() => loadData(true), 2500);
       } else {
         onError(e);
